@@ -6,9 +6,15 @@ export type StoredLibraryItem = {
   size: number;
   lastModified: number;
   file: Blob;
+  title?: string;
   artist?: string;
   album?: string;
+  albumArtist?: string;
   genre?: string;
+  year?: number;
+  trackNo?: number;
+  duration?: number;
+  addedAt?: number;
   cover?: Blob;
 };
 
@@ -25,35 +31,51 @@ function openDB(): Promise<IDBDatabase> {
   });
 }
 
-export async function saveLibrary(items: StoredLibraryItem[]) {
+async function withStore<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T> | void): Promise<T | undefined> {
   const db = await openDB();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    const store = tx.objectStore(STORE);
-    for (const item of items) store.put(item);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-  db.close();
+  try {
+    return await new Promise<T | undefined>((resolve, reject) => {
+      const tx = db.transaction(STORE, mode);
+      const request = run(tx.objectStore(STORE));
+      tx.oncomplete = () => resolve(request ? request.result : undefined);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
+export async function saveLibrary(items: StoredLibraryItem[]) {
+  if (!items.length) return;
+  await withStore("readwrite", (store) => { for (const item of items) store.put(item); });
 }
 
 export async function loadLibrary(): Promise<StoredLibraryItem[]> {
+  return (await withStore<StoredLibraryItem[]>("readonly", (store) => store.getAll())) ?? [];
+}
+
+export async function deleteTracks(ids: string[]) {
+  if (!ids.length) return;
+  await withStore("readwrite", (store) => { for (const id of ids) store.delete(id); });
+}
+
+export async function patchTrack(id: string, patch: Partial<Omit<StoredLibraryItem, "id" | "file">>) {
   const db = await openDB();
-  return await new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readonly");
-    const request = tx.objectStore(STORE).getAll();
-    request.onsuccess = () => { db.close(); resolve(request.result as StoredLibraryItem[]); };
-    request.onerror = () => { db.close(); reject(request.error); };
-  });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE, "readwrite");
+      const store = tx.objectStore(STORE);
+      const get = store.get(id);
+      get.onsuccess = () => { if (get.result) store.put({ ...get.result, ...patch }); };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
 }
 
 export async function clearLibrary() {
-  const db = await openDB();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    const request = tx.objectStore(STORE).clear();
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
-  db.close();
+  await withStore("readwrite", (store) => store.clear());
 }
