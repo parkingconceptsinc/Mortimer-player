@@ -28,7 +28,6 @@ type Item = {
   album?: string;
   genre?: string;
   cover?: string;
-}
 };
 
 const audioExt = /\.(mp3|wav|flac|m4a|aac|ogg|oga|opus|weba|aiff|aif|alac)$/i;
@@ -45,6 +44,7 @@ function kindOf(fileName: string): "audio" | "video" {
 export function Player() {
   const media = useRef<HTMLMediaElement | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
+  const folderInput = useRef<HTMLInputElement | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -205,8 +205,8 @@ export function Player() {
     }).showDirectoryPicker;
 
     if (!picker) {
-      fileInput.current?.click();
-      setStatus("Folder picker is not supported here; choose the folder in the file dialog");
+      folderInput.current?.click();
+      setStatus("Choose your music folder");
       return;
     }
 
@@ -232,7 +232,7 @@ export function Player() {
       }
 
       await walk(directory);
-      addFiles(found);
+      await addFiles(found);
       setStatus(found.length ? `${found.length} media files found in “${directory.name}”` : "No supported media in that folder");
     } catch (error) {
       if ((error as DOMException)?.name !== "AbortError") {
@@ -306,8 +306,8 @@ export function Player() {
               addFiles(e.target.files ?? []);
               e.currentTarget.value = "";
             }}
-            {...({ webkitdirectory: "" } as React.InputHTMLAttributes<HTMLInputElement>)}
           />
+          <input ref={folderInput} hidden type="file" multiple accept="audio/*,video/*,.flac,.mkv,.avi,.mov,.aac,.opus" onChange={(e) => { addFiles(e.target.files ?? []); e.currentTarget.value = ""; }} {...({ webkitdirectory: "" } as React.InputHTMLAttributes<HTMLInputElement>)} />
         </div>
       </header>
 
