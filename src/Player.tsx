@@ -390,10 +390,11 @@ export function Player() {
             onChange={(e) => { setMuted(false); setVolume(Number(e.target.value)); }}
           />
         </div>
-        {current?.kind === "video" && (
+        {current && (
           <button onClick={() => {
-            const video = media.current as HTMLVideoElement | null;
-            if (video?.requestFullscreen) void video.requestFullscreen();
+            const element = media.current as HTMLVideoElement | HTMLAudioElement | null;
+            if (element?.requestFullscreen) void element.requestFullscreen();
+            else if (document.documentElement.requestFullscreen) void document.documentElement.requestFullscreen();
           }} aria-label="Fullscreen"><Maximize /></button>
         )}
         <button onClick={clearQueue} disabled={!items.length} aria-label="Clear queue"><RotateCcw /></button>
