@@ -1,0 +1,1 @@
+{"name":"Mortimer Player","short_name":"Mortimer","start_url":"/Mortimer-player/","scope":"/Mortimer-player/","display":"standalone","background_color":"#0b0b0d","theme_color":"#0b0b0d","description":"Audio and video player PWA","icons":[{"src":"/Mortimer-player/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}
