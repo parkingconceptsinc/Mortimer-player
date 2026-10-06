@@ -92,6 +92,7 @@ export type PlayerState = {
   accent: string;
   songSort: SongSort;
   favorites: Set<string>;
+  videoProgress: Record<string, number>;
   plays: Record<string, number>;
   lastPlayed: Record<string, number>;
   playlists: Playlist[];

@@ -279,6 +279,63 @@ video::cue { font-size: var(--cue, 100%); background: #000b; }
 .npNext b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .npNext em { max-width: 32%; font-style: normal; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* ---------- Video player ---------- */
+.nowPlaying.videoMode { padding: 0; background: #000; }
+.nowPlaying.videoMode::before { display: none; }
+.videoMode .npStage { position: relative; flex: 1 1 auto; min-height: 0; padding: 0; display: block; }
+.videoMode .videoStage { position: absolute; inset: 0; aspect-ratio: auto; max-height: none; border-radius: 0; box-shadow: none; touch-action: none; }
+.videoStage.noCursor { cursor: none; }
+.vpChrome {
+  position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between;
+  background: linear-gradient(#000b, transparent 22%, transparent 62%, #000d); transition: opacity 0.25s;
+}
+.vpChrome.hidden { opacity: 0; pointer-events: none; }
+.vpTop { display: flex; align-items: center; gap: 4px; padding: calc(6px + env(safe-area-inset-top)) 6px 6px; }
+.vpTop .iconBtn, .vpCenter .iconBtn { color: #fff; }
+.vpTitle { flex: 1; min-width: 0; padding: 0 4px; }
+.vpTitle b, .vpTitle small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vpTitle b { font-size: 16px; }
+.vpTitle small { margin-top: 2px; font-size: 12px; color: #ffffffa0; }
+.vpCenter { display: flex; align-items: center; justify-content: center; gap: clamp(4px, 4vw, 30px); }
+.vpCenter .iconBtn.big { width: 56px; height: 56px; background: #0000008c; backdrop-filter: blur(6px); }
+.vpCenter .playBtn { width: 72px; height: 72px; }
+.vpBottom { padding: 0 14px calc(10px + env(safe-area-inset-bottom)); }
+.vpBottom .seekTimes { color: #ffffffc0; }
+.vpTools { display: flex; gap: 4px; justify-content: safe center; overflow-x: auto; margin-top: 6px; scrollbar-width: none; }
+.vpTools::-webkit-scrollbar { display: none; }
+.vpTools .toolBtn { background: #ffffff17; color: #fff; }
+.vpTools .toolBtn.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 22%, #0008); }
+.vpIndicator {
+  position: absolute; top: 16%; left: 50%; display: flex; align-items: center; gap: 8px; padding: 10px 18px;
+  border-radius: 999px; background: #000c; color: #fff; font-weight: 700; font-variant-numeric: tabular-nums; transform: translateX(-50%); pointer-events: none;
+}
+.nowPlaying:fullscreen { width: 100vw; height: 100vh; }
+.immersive .tabbar, .immersive .miniPlayer { display: none; }
+
+/* ---------- Videos screen ---------- */
+.scrollChips { flex-wrap: nowrap; overflow-x: auto; margin: -4px -16px 6px; padding: 4px 16px; scrollbar-width: none; }
+.scrollChips::-webkit-scrollbar { display: none; }
+.scrollChips .chip { flex: none; }
+.videoGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 165px), 1fr)); gap: 18px 12px; }
+.videoCard { min-width: 0; cursor: pointer; }
+.videoThumb { position: relative; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 12px; background: #000; box-shadow: 0 8px 24px #0008; }
+.videoThumb .art { width: 100%; height: 100%; }
+.videoThumb .art.placeholder svg { width: 24%; height: 24%; }
+.videoDur { position: absolute; right: 8px; bottom: 9px; padding: 2px 6px; border-radius: 6px; background: #000c; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.videoNow { position: absolute; left: 8px; top: 8px; padding: 6px 8px; border-radius: 8px; background: #000c; }
+.videoProgress { position: absolute; left: 0; bottom: 0; height: 4px; background: var(--accent); }
+.videoPlayIcon {
+  position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; display: grid; place-items: center; border-radius: 50%;
+  background: #000a; color: #fff; transform: translate(-50%, -50%) scale(0.9); opacity: 0; transition: opacity 0.18s, transform 0.18s;
+}
+.videoCard:hover .videoPlayIcon { opacity: 1; transform: translate(-50%, -50%); }
+.videoCard.active .videoMeta b { color: var(--accent); }
+.videoMeta { display: flex; align-items: flex-start; gap: 4px; margin-top: 8px; }
+.videoMeta > div { flex: 1; min-width: 0; }
+.videoMeta b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 14.5px; font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
+.videoMeta small { display: block; margin-top: 3px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.videoMeta .iconBtn { width: 34px; height: 34px; margin-top: -4px; }
+
 /* ---------- Mini player & tab bar ---------- */
 .miniPlayer {
   position: relative; display: flex; align-items: center; gap: 10px; margin: 0 8px 6px; padding: 7px 4px 7px 7px; overflow: hidden; cursor: pointer;
@@ -298,7 +355,7 @@ video::cue { font-size: var(--cue, 100%); background: #000b; }
   display: flex; padding: 4px 2px calc(4px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--line); background: #0b0b10f2; backdrop-filter: blur(20px);
 }
-.tabbar button { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 0 5px; border: 0; background: none; color: var(--dim); font-size: 10.5px; font-weight: 650; }
+.tabbar button { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 0 5px; border: 0; background: none; color: var(--dim); font-size: 10px; font-weight: 650; }
 .tabbar button.active { color: var(--text); }
 .tabbar button.active svg { color: var(--accent); }
 .tabbar em { position: absolute; top: 2px; left: calc(50% + 6px); padding: 1px 5px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: 9px; font-style: normal; font-weight: 800; }
@@ -439,6 +496,10 @@ video::cue { font-size: var(--cue, 100%); background: #000b; }
   .nowPlaying { align-items: center; padding: 0 40px 28px; }
   .nowPlaying > *:not(.npBackdrop) { width: 100%; max-width: 560px; }
   .npTools { margin: 14px 0 0; padding: 0 0 4px; }
+  .nowPlaying.videoMode { padding: 0; }
+  .nowPlaying.videoMode > * { max-width: none; }
+  .scrollChips { margin: -4px -32px 6px; padding: 4px 32px; }
+  .videoGrid { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 22px 18px; }
   .eqScreen, .settingsScreen, .queueScreen { max-width: 100%; }
   .eqScreen > *:not(.screenHeader), .settingsScreen > *:not(.screenHeader) { max-width: 760px; }
   .toast { bottom: 110px; left: calc(50% + 122px); }
