@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { parseBlob } from "music-metadata-browser";
 import {
   FolderOpen,
   Play,
@@ -23,6 +24,11 @@ type Item = {
   kind: "audio" | "video";
   size: number;
   path?: string;
+  artist?: string;
+  album?: string;
+  genre?: string;
+  cover?: string;
+}
 };
 
 const audioExt = /\.(mp3|wav|flac|m4a|aac|ogg|oga|opus|weba|aiff|aif|alac)$/i;
@@ -49,11 +55,21 @@ export function Player() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [status, setStatus] = useState("Choose your music folder");
+  const [libraryTab, setLibraryTab] = useState<"songs" | "artists" | "albums">("songs");
+  const [search, setSearch] = useState("");
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [showQueue, setShowQueue] = useState(false);
   const wakeLock = useRef<WakeLockSentinel | null>(null);
 
   const current = items[index];
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return q ? items.filter((x) => [x.name, x.artist, x.album, x.genre].some((v) => v?.toLowerCase().includes(q))) : items;
+  }, [items, search]);
+  const groups = useMemo(() => {
+    const key = libraryTab === "artists" ? "artist" : "album";
+    return Array.from(new Set(items.map((x) => x[key] || "Unknown"))).sort();
+  }, [items, libraryTab]);
 
   useEffect(() => {
     const onBeforeInstall = (event: Event) => { event.preventDefault(); setInstallEvent(event as BeforeInstallPromptEvent); };
@@ -161,14 +177,21 @@ export function Player() {
       return;
     }
 
-    const added = files.map((file) => ({
-      id: crypto.randomUUID(),
-      name: file.name,
-      url: URL.createObjectURL(file),
-      kind: kindOf(file.name),
-      size: file.size,
-    }));
-
+    const added: Item[] = [];
+    for (const file of files) {
+      let artist = "", album = "", genre = "", cover = "";
+      if (kindOf(file.name) === "audio") {
+        try {
+          const meta = await parseBlob(file);
+          artist = meta.common.artist || "";
+          album = meta.common.album || "";
+          genre = meta.common.genre?.[0] || "";
+          const picture = meta.common.picture?.[0];
+          if (picture) cover = URL.createObjectURL(new Blob([picture.data], { type: picture.format }));
+        } catch {}
+      }
+      added.push({ id: crypto.randomUUID(), name: file.name, url: URL.createObjectURL(file), kind: kindOf(file.name), size: file.size, artist, album, genre, cover });
+    }
     setItems((old) => [...old, ...added]);
     setStatus(`${added.length} media file${added.length === 1 ? "" : "s"} added`);
   }
@@ -305,7 +328,7 @@ export function Player() {
         <div>
           <span>NOW PLAYING</span>
           <h1>{current?.name || "Nothing selected"}</h1>
-          <p>{current ? current.kind.toUpperCase() : status}</p>
+          <p>{current ? [current.artist, current.album].filter(Boolean).join(" • ") || current.kind.toUpperCase() : status}</p>
         </div>
         <button onClick={removeCurrent} disabled={!current} aria-label="Remove current"><Trash2 size={18} /></button>
       </section>
@@ -371,12 +394,13 @@ export function Player() {
       <section className={"queue " + (showQueue ? "mobileOpen" : "")}>
         <div className="queueTitle"><b>QUEUE</b><span>{items.length} items</span></div>
         {!items.length && <div className="empty">{status}</div>}
-        {items.map((item, i) => (
+        {libraryTab !== "songs" && groups.map((group) => <button className="row" key={group} onClick={() => { setSearch(group === "Unknown" ? "" : group); setLibraryTab("songs"); }}><span><Music2/></span><div><b>{group}</b><small>{libraryTab === "artists" ? "Artist" : "Album"}</small></div></button>)}
+        {libraryTab === "songs" && filtered.map((item) => { const i = items.indexOf(item); return (
           <button className={"row " + (i === index ? "selected" : "")} key={item.id} onClick={() => setIndex(i)}>
             <span>{item.kind === "video" ? <Film /> : <Music2 />}</span>
-            <div><b>{item.name}</b><small>{item.kind}</small></div>
+            <div><b>{item.name}</b><small>{[item.artist, item.album, item.kind].filter(Boolean).join(" • ")}</small></div>
           </button>
-        ))}
+        ); })}
       </section>
     </main>
   );
