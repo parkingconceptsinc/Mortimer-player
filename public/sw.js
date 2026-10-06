@@ -1,10 +1,11 @@
-const CACHE = "mortimer-shell-v4";
+const CACHE = "six-shell-v5";
 const SHELL = [
   "/Mortimer-player/",
   "/Mortimer-player/manifest.webmanifest",
-  "/Mortimer-player/icon.svg",
-  "/Mortimer-player/icon-192.svg",
-  "/Mortimer-player/icon-512.svg"
+  "/Mortimer-player/favicon.png",
+  "/Mortimer-player/logo.png",
+  "/Mortimer-player/icon-192.png",
+  "/Mortimer-player/icon-512.png"
 ];
 
 self.addEventListener("install", (event) => {

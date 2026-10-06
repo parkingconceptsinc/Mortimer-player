@@ -18,25 +18,47 @@ export type StoredLibraryItem = {
   cover?: Blob;
 };
 
+export type StoredComic = {
+  id: string;
+  name: string;
+  path: string;
+  size: number;
+  lastModified: number;
+  addedAt: number;
+  format: "cbz" | "cbr" | "pdf";
+  pages?: number;
+  file: Blob;
+  cover?: Blob;
+};
+
 const DB_NAME = "mortimer-player";
 const STORE = "library";
-const VERSION = 1;
+const COMICS = "comics";
+const VERSION = 2;
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, VERSION);
-    request.onupgradeneeded = () => request.result.createObjectStore(STORE, { keyPath: "id" });
-    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(COMICS)) db.createObjectStore(COMICS, { keyPath: "id" });
+    };
+    request.onsuccess = () => {
+      // Lets a newer tab upgrade the schema instead of being blocked by this connection.
+      request.result.onversionchange = () => request.result.close();
+      resolve(request.result);
+    };
     request.onerror = () => reject(request.error);
   });
 }
 
-async function withStore<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T> | void): Promise<T | undefined> {
+async function withStore<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T> | void, storeName = STORE): Promise<T | undefined> {
   const db = await openDB();
   try {
     return await new Promise<T | undefined>((resolve, reject) => {
-      const tx = db.transaction(STORE, mode);
-      const request = run(tx.objectStore(STORE));
+      const tx = db.transaction(storeName, mode);
+      const request = run(tx.objectStore(storeName));
       tx.oncomplete = () => resolve(request ? request.result : undefined);
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error);
@@ -78,4 +100,34 @@ export async function patchTrack(id: string, patch: Partial<Omit<StoredLibraryIt
 
 export async function clearLibrary() {
   await withStore("readwrite", (store) => store.clear());
+}
+
+export async function saveComics(items: StoredComic[]) {
+  if (!items.length) return;
+  await withStore("readwrite", (store) => { for (const item of items) store.put(item); }, COMICS);
+}
+
+export async function loadComics(): Promise<StoredComic[]> {
+  return (await withStore<StoredComic[]>("readonly", (store) => store.getAll(), COMICS)) ?? [];
+}
+
+export async function deleteComics(ids: string[]) {
+  if (!ids.length) return;
+  await withStore("readwrite", (store) => { for (const id of ids) store.delete(id); }, COMICS);
+}
+
+export async function patchComic(id: string, patch: Partial<Omit<StoredComic, "id" | "file">>) {
+  const db = await openDB();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(COMICS, "readwrite");
+      const store = tx.objectStore(COMICS);
+      const get = store.get(id);
+      get.onsuccess = () => { if (get.result) store.put({ ...get.result, ...patch }); };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
 }

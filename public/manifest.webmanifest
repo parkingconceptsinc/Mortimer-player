@@ -1,28 +1,20 @@
 {
   "id": "/Mortimer-player/",
-  "name": "Mortimer Player",
-  "short_name": "Mortimer",
+  "name": "6",
+  "short_name": "6",
   "lang": "en",
   "start_url": "/Mortimer-player/",
   "scope": "/Mortimer-player/",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#0b0b0d",
-  "theme_color": "#0b0b0d",
-  "description": "Audio and video player PWA",
-  "categories": ["music", "multimedia"],
+  "orientation": "any",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "description": "Music, video and comics — all on your device",
+  "categories": ["music", "entertainment", "books"],
   "icons": [
-    {
-      "src": "/Mortimer-player/icon-192.svg",
-      "sizes": "192x192",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/Mortimer-player/icon-512.svg",
-      "sizes": "512x512",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    }
+    { "src": "/Mortimer-player/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/Mortimer-player/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/Mortimer-player/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/Mortimer-player/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

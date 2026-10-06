@@ -1,5 +1,5 @@
 import { createContext, useContext, type RefObject } from "react";
-import type { EqSettings, Playlist, RepeatMode, Route, Screen, SongSort, Track, VideoFit } from "./types";
+import type { Comic, ComicProgress, EqSettings, Playlist, ReaderSettings, RepeatMode, Route, Screen, SongSort, Track, VideoFit } from "./types";
 
 export type MenuTarget = {
   title: string;
@@ -59,6 +59,11 @@ export type Actions = {
   loadSubtitles(file: File): void;
   install(): void;
   toast(message: string): void;
+  openComic(id: string, options?: { fromStart?: boolean }): void;
+  closeComic(): void;
+  setComicProgress(id: string, progress: ComicProgress | null): void;
+  setReaderSettings(update: (settings: ReaderSettings) => ReaderSettings): void;
+  removeComics(ids: string[]): void;
   openMenu(target: MenuTarget): void;
   goTo(screen: Screen): void;
   navigate(route: Route): void;
@@ -93,6 +98,11 @@ export type PlayerState = {
   songSort: SongSort;
   favorites: Set<string>;
   videoProgress: Record<string, number>;
+  comics: Comic[];
+  comicProgress: Record<string, ComicProgress>;
+  readerSettings: ReaderSettings;
+  readerId: string | null;
+  readerStart: number | null;
   plays: Record<string, number>;
   lastPlayed: Record<string, number>;
   playlists: Playlist[];

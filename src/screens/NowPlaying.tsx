@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import {
-  Captions, ChevronDown, Disc3, EllipsisVertical, Film, Gauge, Heart, Maximize, Minimize, Music2, Pause, PictureInPicture2, Play,
+  Captions, ChevronDown, Disc3, EllipsisVertical, Film, Gauge, Heart, ListMusic, Maximize, Minimize, Music2, Pause, PictureInPicture2, Play,
   Repeat, Repeat1, RotateCcw, RotateCw, Scaling, Shuffle, SkipBack, SkipForward, SlidersHorizontal, Sun, Timer, Volume1,
   Volume2, VolumeX, type LucideIcon,
 } from "lucide-react";
@@ -192,9 +192,12 @@ export const NowPlaying = memo(function NowPlaying({ active }: { active: boolean
       {!isVideo && <div className="npBackdrop" style={current?.cover ? ({ "--cover": `url("${current.cover}")` } as CSSProperties) : undefined} />}
       {!isVideo && (
         <header className="npTop">
-          <button className="iconBtn" aria-label="Back to library" onClick={() => actions.back()}><ChevronDown size={26} /></button>
+          <span className="npTopActions"><button className="iconBtn" aria-label="Back to library" onClick={() => actions.back()}><ChevronDown size={26} /></button></span>
           <div className="npSource"><small>PLAYING FROM</small><b>{current ? p.queueSource || "Library" : "—"}</b></div>
-          <button className="iconBtn" aria-label="Track options" disabled={!current} onClick={openTrackMenu}><EllipsisVertical size={22} /></button>
+          <span className="npTopActions">
+            <button className="iconBtn" aria-label="Queue" title="Queue" onClick={() => actions.goTo("queue")}><ListMusic size={22} /></button>
+            <button className="iconBtn" aria-label="Track options" disabled={!current} onClick={openTrackMenu}><EllipsisVertical size={22} /></button>
+          </span>
         </header>
       )}
 
