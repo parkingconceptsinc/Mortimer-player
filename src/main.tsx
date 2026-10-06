@@ -11,6 +11,8 @@ createRoot(document.getElementById("root")!).render(
 
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => {
-    void navigator.serviceWorker.register("/Mortimer-player/sw.js");
+    void navigator.serviceWorker.register("/Mortimer-player/sw.js", {
+      updateViaCache: "none"
+    }).then((registration) => registration.update()).catch(() => {});
   });
 }
