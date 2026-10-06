@@ -30,3 +30,5 @@
   .queue{display:none;margin-top:10px}
   .queue.mobileOpen{display:block}
 }
+
+.libraryHead{padding:10px 0}.search{width:100%;margin:8px 0;padding:11px 13px;border:1px solid #29292f;background:#121217;color:#eee;border-radius:11px;outline:none}.tabs{display:flex;gap:6px}.tabs button{flex:1;border:1px solid #29292f;background:#121217;color:#888;padding:9px;border-radius:9px}.tabs button.active{background:#eee;color:#111;border-color:#eee}.cover{width:min(72%,320px);aspect-ratio:1;border-radius:18px;object-fit:cover;box-shadow:0 16px 40px #0008}.art img+strong{margin-top:2px}
