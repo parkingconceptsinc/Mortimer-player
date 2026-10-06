@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type InputHTMLAttributes } from "react";
 import {
   FolderOpen,
   Play,
@@ -314,7 +314,7 @@ export function Player() {
               e.currentTarget.value = "";
             }}
           />
-          <input ref={folderInput} hidden type="file" multiple accept="audio/*,video/*,.flac,.mkv,.avi,.mov,.aac,.opus" onChange={(e) => { addFiles(e.target.files ?? []); e.currentTarget.value = ""; }} {...({ webkitdirectory: "" } as React.InputHTMLAttributes<HTMLInputElement>)} />
+          <input ref={folderInput} hidden type="file" multiple accept="audio/*,video/*,.flac,.mkv,.avi,.mov,.aac,.opus" onChange={(e) => { addFiles(e.target.files ?? []); e.currentTarget.value = ""; }} {...({ webkitdirectory: "" } as InputHTMLAttributes<HTMLInputElement>)} />
         </div>
       </header>
 
