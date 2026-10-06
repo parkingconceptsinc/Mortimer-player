@@ -59,6 +59,7 @@ export function Player() {
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [showQueue, setShowQueue] = useState(false);
   const [libraryMode, setLibraryMode] = useState<"songs" | "artists" | "albums">("songs");
+  const [libraryPersistent, setLibraryPersistent] = useState(true);
   const wakeLock = useRef<WakeLockSentinel | null>(null);
 
   const current = items[index];
