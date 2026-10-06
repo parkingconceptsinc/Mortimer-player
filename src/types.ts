@@ -25,7 +25,7 @@ export type RepeatMode = "off" | "all" | "one";
 
 export type Playlist = { id: string; name: string; trackIds: string[]; createdAt: number };
 
-export type Screen = "library" | "player" | "queue" | "eq" | "settings";
+export type Screen = "library" | "videos" | "player" | "queue" | "eq" | "settings";
 
 export type Route =
   | { view: "home" }
@@ -43,11 +43,12 @@ export type Route =
   | { view: "favorites" }
   | { view: "recent" }
   | { view: "top" }
-  | { view: "history" }
-  | { view: "videos" };
+  | { view: "history" };
 
 export type EqSettings = { enabled: boolean; preset: string; bands: number[]; preamp: number };
 
 export type VideoFit = "contain" | "cover" | "fill";
 
 export type SongSort = "title" | "artist" | "album" | "added" | "duration" | "plays";
+
+export type VideoSort = "added" | "title" | "duration" | "size";

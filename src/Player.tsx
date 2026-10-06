@@ -1,26 +1,31 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type InputHTMLAttributes } from "react";
-import { Disc3, Download, FilePlus, FolderOpen, Library as LibraryIcon, ListMusic, Settings as SettingsIcon, SlidersHorizontal, type LucideIcon } from "lucide-react";
+import { Clapperboard, Disc3, Download, FilePlus, FolderOpen, Library as LibraryIcon, ListMusic, Settings as SettingsIcon, SlidersHorizontal, type LucideIcon } from "lucide-react";
 import { applyAudio, attachElement, EQ_PRESETS, initEngine, resumeEngine } from "./audioEngine";
 import { PlayerContext, ProgressContext, type Actions, type MenuTarget, type PlayerState, type SleepState } from "./context";
 import { clearLibrary as clearStoredLibrary, deleteTracks, loadLibrary, patchTrack, saveLibrary, type StoredLibraryItem } from "./library";
 import { readItem, type Incoming } from "./metadata";
 import { readPref, usePref, writePref } from "./prefs";
 import type { EqSettings, Playlist, RepeatMode, Route, Screen, SongSort, Track, VideoFit } from "./types";
-import { ACCENTS, compareText, shuffled, srtToVtt, supported, toTrack, trackKey } from "./util";
+import { ACCENTS, compareText, formatTime, shuffled, srtToVtt, supported, toTrack, trackKey } from "./util";
+import { captureVideoFrame } from "./thumbnails";
 import { MiniPlayer, TrackMenu } from "./components";
 import { Library } from "./screens/Library";
 import { NowPlaying } from "./screens/NowPlaying";
 import { Queue } from "./screens/Queue";
 import { Equalizer } from "./screens/Equalizer";
 import { Settings } from "./screens/Settings";
+import { Videos } from "./screens/Videos";
 
-const NAV: Array<[Screen, string, LucideIcon]> = [
-  ["library", "Library", LibraryIcon],
-  ["player", "Playing", Disc3],
-  ["queue", "Queue", ListMusic],
-  ["eq", "Equalizer", SlidersHorizontal],
-  ["settings", "Settings", SettingsIcon],
+const NAV: Array<[Screen, string, string, LucideIcon]> = [
+  ["library", "Library", "Music", LibraryIcon],
+  ["videos", "Videos", "Videos", Clapperboard],
+  ["player", "Now Playing", "Playing", Disc3],
+  ["queue", "Queue", "Queue", ListMusic],
+  ["eq", "Equalizer", "EQ", SlidersHorizontal],
+  ["settings", "Settings", "Settings", SettingsIcon],
 ];
+
+const thumbAttempted = new Set<string>();
 
 type DirectoryEntry = { kind: "file" | "directory"; name: string; getFile?: () => Promise<File>; values?: () => AsyncIterable<DirectoryEntry> };
 type DirectoryHandleLike = { name: string; values: () => AsyncIterable<DirectoryEntry> };
@@ -41,6 +46,9 @@ export function Player() {
   const pushedHistory = useRef(0);
   const engineStarted = useRef(false);
   const toastTimer = useRef<number | undefined>(undefined);
+  const thumbBusy = useRef(false);
+  const returnScreen = useRef<Screen>("library");
+  const loadedTrack = useRef<{ id: string; kind: Track["kind"] } | null>(null);
 
   const [loaded, setLoaded] = useState(false);
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -66,6 +74,7 @@ export function Player() {
   const [accent, setAccent] = usePref("accent", "Coral");
   const [songSort, setSongSort] = usePref<SongSort>("songSort", "title");
   const [favoritesList, setFavoritesList] = usePref<string[]>("favorites", []);
+  const [videoProgress, setVideoProgress] = usePref<Record<string, number>>("videoProgress", {});
   const [plays, setPlays] = usePref<Record<string, number>>("plays", {});
   const [lastPlayed, setLastPlayed] = usePref<Record<string, number>>("lastPlayed", {});
   const [playlists, setPlaylists] = usePref<Playlist[]>("playlists", []);
@@ -82,6 +91,7 @@ export function Player() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuTarget | null>(null);
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const [thumbTick, setThumbTick] = useState(0);
 
   const trackMap = useMemo(() => new Map(tracks.map((t) => [t.id, t])), [tracks]);
   const favorites = useMemo(() => new Set(favoritesList), [favoritesList]);
@@ -104,6 +114,7 @@ export function Player() {
 
   function handleBack() {
     if (menu) setMenu(null);
+    else if (screen === "player" && returnScreen.current !== "player") setScreen(returnScreen.current);
     else if (screen !== "library") setScreen("library");
     else if (routes.length > 1) setRoutes((r) => r.slice(0, -1));
   }
@@ -122,7 +133,13 @@ export function Player() {
 
   function saveResume() {
     const el = mediaRef.current;
-    if (current && el) writePref("resume", { id: current.id, time: el.currentTime });
+    if (!current || !el) return;
+    writePref("resume", { id: current.id, time: el.currentTime });
+    if (current.kind === "video" && el.currentTime > 0) {
+      const id = current.id;
+      const t = el.currentTime;
+      setVideoProgress((p) => ({ ...p, [id]: t }));
+    }
   }
 
   function advance(step: 1 | -1, auto: boolean) {
@@ -170,6 +187,7 @@ export function Player() {
     setQIndex(startIdx);
     setQueueSource(options?.source ?? "Library");
     if (trackMap.get(nextQueue[startIdx])?.kind === "video" && screen !== "player") {
+      returnScreen.current = screen;
       setScreen("player");
       pushHistory();
     }
@@ -454,6 +472,7 @@ export function Player() {
       setFavoritesList([]);
       setPlays({});
       setLastPlayed({});
+      setVideoProgress({});
       setRoutes([{ view: "home" }]);
       void clearStoredLibrary().catch(() => toast("Couldn't clear local storage"));
       toast("Library cleared");
@@ -511,6 +530,7 @@ export function Player() {
         if (target === "library") setRoutes([{ view: "home" }]);
         return;
       }
+      if (target === "player") returnScreen.current = screen;
       setScreen(target);
       if (target !== "library") pushHistory();
     },
@@ -572,6 +592,11 @@ export function Player() {
     },
     onEnded() {
       const el = mediaRef.current;
+      if (current?.kind === "video" && el) {
+        const id = current.id;
+        const d = el.duration;
+        setVideoProgress((p) => ({ ...p, [id]: Number.isFinite(d) ? d : p[id] ?? 0 }));
+      }
       if (sleep.endOfTrack) {
         setSleepState({ endsAt: null, endOfTrack: false });
         wantPlay.current = false;
@@ -651,6 +676,12 @@ export function Player() {
     const audio = audioRef.current;
     const video = videoRef.current;
     if (!audio || !video) return;
+    const previous = loadedTrack.current;
+    if (previous?.kind === "video" && video.getAttribute("src") && video.currentTime > 0 && !video.ended) {
+      const t = video.currentTime;
+      setVideoProgress((p) => ({ ...p, [previous.id]: t }));
+    }
+    loadedTrack.current = current ? { id: current.id, kind: current.kind } : null;
     const el = current?.kind === "video" ? video : audio;
     const other = el === audio ? video : audio;
     mediaRef.current = el;
@@ -674,6 +705,11 @@ export function Player() {
       setCurrentTime(0);
       setDuration(0);
       return;
+    }
+    const watched = videoProgress[current.id];
+    if (current.kind === "video" && resumePosition && pendingSeek.current == null && watched > 5 && (!current.duration || watched < current.duration - 5)) {
+      pendingSeek.current = watched;
+      toast(`Resuming at ${formatTime(watched)}`);
     }
     setCurrentTime(pendingSeek.current ?? 0);
     setDuration(current.duration ?? 0);
@@ -709,6 +745,24 @@ export function Player() {
     }
     applyAudio({ enabled: eq.enabled, bands: eq.bands, preamp: eq.preamp, balance, boost });
   }, [eq, balance, boost]);
+
+  useEffect(() => {
+    if (screen === "player" || thumbBusy.current) return;
+    const next = tracks.find((t) => t.kind === "video" && !t.cover && !thumbAttempted.has(t.id));
+    if (!next) return;
+    thumbAttempted.add(next.id);
+    thumbBusy.current = true;
+    void captureVideoFrame(next.url).then(({ image, duration: d }) => {
+      thumbBusy.current = false;
+      const newDuration = !next.duration && d ? d : undefined;
+      if (image || newDuration) {
+        const cover = image ? URL.createObjectURL(image) : undefined;
+        setTracks((old) => old.map((t) => (t.id === next.id ? { ...t, cover: cover ?? t.cover, duration: t.duration ?? newDuration } : t)));
+        void patchTrack(next.id, { ...(image ? { cover: image } : {}), ...(newDuration ? { duration: newDuration } : {}) }).catch(() => {});
+      }
+      setThumbTick((n) => n + 1);
+    });
+  }, [tracks, screen, thumbTick]);
 
   useEffect(() => {
     if (!sleep.endsAt) return;
@@ -838,11 +892,11 @@ export function Player() {
   const state: PlayerState = useMemo(() => ({
     loaded, tracks, trackMap, queue, qIndex, queueSource, current, playing, shuffle, repeat, volume, muted, speed, preservePitch,
     eq, customPresets, balance, boost, skipSeconds, resumePosition, videoFit, subtitleSize, showRemaining, accent, songSort,
-    favorites, plays, lastPlayed, playlists, screen, routes, sleep, sleepRemaining: sleepRemaining == null ? null : Math.ceil(sleepRemaining),
+    favorites, videoProgress, plays, lastPlayed, playlists, screen, routes, sleep, sleepRemaining: sleepRemaining == null ? null : Math.ceil(sleepRemaining),
     ab, subtitles, importing, canInstall: !!installEvent, videoRef, actions,
   }), [loaded, tracks, trackMap, queue, qIndex, queueSource, current, playing, shuffle, repeat, volume, muted, speed, preservePitch,
     eq, customPresets, balance, boost, skipSeconds, resumePosition, videoFit, subtitleSize, showRemaining, accent, songSort,
-    favorites, plays, lastPlayed, playlists, screen, routes, sleep, sleepRemaining == null ? null : Math.ceil(sleepRemaining),
+    favorites, videoProgress, plays, lastPlayed, playlists, screen, routes, sleep, sleepRemaining == null ? null : Math.ceil(sleepRemaining),
     ab, subtitles, importing, installEvent, actions]);
 
   const progress = useMemo(() => ({ currentTime, duration }), [currentTime, duration]);
@@ -851,14 +905,14 @@ export function Player() {
   return (
     <PlayerContext.Provider value={state}>
       <ProgressContext.Provider value={progress}>
-        <div className={`shell screen-${screen}${current ? " hasCurrent" : ""}`} style={{ "--accent": accentColor } as CSSProperties}>
+        <div className={`shell screen-${screen}${current ? " hasCurrent" : ""}${screen === "player" && current?.kind === "video" ? " immersive" : ""}`} style={{ "--accent": accentColor } as CSSProperties}>
           <aside className="sidebar">
             <div className="brand">
               <div className="logo"><Disc3 size={20} /></div>
               <div><b>Mortimer</b><span>PLAYER</span></div>
             </div>
             <nav>
-              {NAV.map(([id, label, Icon]) => (
+              {NAV.map(([id, label, , Icon]) => (
                 <button key={id} className={screen === id ? "active" : ""} onClick={() => actions.goTo(id)}>
                   <Icon size={19} /><span>{label}</span>
                   {id === "queue" && queue.length > 0 && <em>{queue.length}</em>}
@@ -875,6 +929,7 @@ export function Player() {
           <main className="main">
             <Library active={screen === "library"} />
             <NowPlaying active={screen === "player"} />
+            {screen === "videos" && <Videos />}
             {screen === "queue" && <Queue />}
             {screen === "eq" && <Equalizer />}
             {screen === "settings" && <Settings />}
@@ -883,9 +938,9 @@ export function Player() {
           <MiniPlayer />
 
           <nav className="tabbar">
-            {NAV.map(([id, label, Icon]) => (
+            {NAV.map(([id, , short, Icon]) => (
               <button key={id} className={screen === id ? "active" : ""} onClick={() => actions.goTo(id)}>
-                <Icon size={21} /><span>{label}</span>
+                <Icon size={21} /><span>{short}</span>
                 {id === "queue" && queue.length > 0 && <em>{queue.length > 99 ? "99+" : queue.length}</em>}
               </button>
             ))}

@@ -117,10 +117,6 @@ export const Library = memo(function Library({ active }: { active: boolean }) {
       title = "Songs";
       content = <SongsView tracks={lib.songs} q={q} />;
       break;
-    case "videos":
-      title = "Videos";
-      content = <TrackList tracks={filter(lib.videos, q)} source="Videos" toolbar />;
-      break;
     case "artists":
       title = "Artists";
       subtitle = `${lib.artists.length} artists`;
@@ -258,7 +254,6 @@ function Home({ lib }: { lib: Lib }) {
     [{ view: "top" }, "Most played", TrendingUp, topCount || ""],
     [{ view: "history" }, "Recently played", History, ""],
   ];
-  if (lib.videos.length) tiles.push([{ view: "videos" }, "Videos", Film, lib.videos.length]);
   const recentAlbums = [...lib.albums].sort((a, b) => b.addedAt - a.addedAt).slice(0, 14);
   const recentlyPlayed = Object.entries(lastPlayed).sort((a, b) => b[1] - a[1]).map(([id]) => trackMap.get(id)).filter((t): t is Track => !!t).slice(0, 6);
 
@@ -276,6 +271,11 @@ function Home({ lib }: { lib: Lib }) {
             {count !== "" && <em>{count}</em>}
           </button>
         ))}
+        <button className="tile" onClick={() => actions.goTo("videos")}>
+          <Film size={22} />
+          <span>Videos</span>
+          <em>{lib.videos.length}</em>
+        </button>
       </div>
       {recentlyPlayed.length > 0 && (
         <>
