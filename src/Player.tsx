@@ -48,9 +48,37 @@ export function Player() {
   const [volume, setVolume] = useState(1);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [status, setStatus] = useState("Open media or choose a folder");
+  const [status, setStatus] = useState("Choose your music folder");
+  const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const [showQueue, setShowQueue] = useState(false);
+  const wakeLock = useRef<WakeLockSentinel | null>(null);
 
   const current = items[index];
+
+  useEffect(() => {
+    const onBeforeInstall = (event: Event) => { event.preventDefault(); setInstallEvent(event as BeforeInstallPromptEvent); };
+    window.addEventListener("beforeinstallprompt", onBeforeInstall);
+    return () => window.removeEventListener("beforeinstallprompt", onBeforeInstall);
+  }, []);
+
+  useEffect(() => {
+    const syncWakeLock = async () => {
+      if (playing && "wakeLock" in navigator) {
+        try { wakeLock.current = await navigator.wakeLock.request("screen"); } catch {}
+      } else if (wakeLock.current) {
+        try { await wakeLock.current.release(); } catch {}
+        wakeLock.current = null;
+      }
+    };
+    void syncWakeLock();
+    return () => { if (wakeLock.current) void wakeLock.current.release(); };
+  }, [playing]);
+
+  async function installApp() {
+    if (!installEvent) return;
+    await installEvent.prompt();
+    setInstallEvent(null);
+  }
 
   useEffect(() => {
     const m = media.current;
@@ -242,7 +270,8 @@ export function Player() {
           <div><b>Mortimer</b><span>PLAYER</span></div>
         </div>
         <div className="headerActions">
-          <button className="open" onClick={openFolder}><FolderOpen size={18} /> Open folder</button>
+          {installEvent && <button className="open install" onClick={installApp}>Install</button>}
+          <button className="open" onClick={openFolder}><FolderOpen size={18} /> Music folder</button>
           <button className="open secondary" onClick={() => fileInput.current?.click()}>Open files</button>
           <input
             ref={fileInput}
@@ -333,7 +362,13 @@ export function Player() {
         <button onClick={clearQueue} disabled={!items.length} aria-label="Clear queue"><RotateCcw /></button>
       </div>
 
-      <section className="queue">
+      <div className="mobileStatus">{status}</div>
+      <nav className="mobileNav">
+        <button className={!showQueue ? "active" : ""} onClick={() => setShowQueue(false)}><Music2/><span>Player</span></button>
+        <button className={showQueue ? "active" : ""} onClick={() => setShowQueue(true)}><FolderOpen/><span>Queue</span><b>{items.length}</b></button>
+        <button onClick={openFolder}><FolderOpen/><span>Library</span></button>
+      </nav>
+      <section className={"queue " + (showQueue ? "mobileOpen" : "")}>
         <div className="queueTitle"><b>QUEUE</b><span>{items.length} items</span></div>
         {!items.length && <div className="empty">{status}</div>}
         {items.map((item, i) => (
