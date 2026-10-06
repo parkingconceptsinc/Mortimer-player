@@ -327,7 +327,7 @@ export function Player() {
 
       <section className="stage">
         {current?.kind === "video" ? (
-          <video ref={(node) => { media.current = node; }} src={current.url} playsInline />
+          <video ref={(node) => { media.current = node; }} src={current.url} playsInline onError={() => { setPlaying(false); setStatus("This video format is not supported by your browser"); }} />
         ) : (
           <div className="art">
             <Music2 size={72} />
@@ -335,7 +335,7 @@ export function Player() {
             <small>{current ? "Ready to play" : status}</small>
           </div>
         )}
-        {current?.kind === "audio" && <audio ref={(node) => { media.current = node; }} src={current.url} preload="metadata" />}
+        {current?.kind === "audio" && <audio ref={(node) => { media.current = node; }} src={current.url} preload="metadata" onError={() => { setPlaying(false); setStatus("This audio format is not supported by your browser"); }} />}
       </section>
 
       <section className="now">
