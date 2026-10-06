@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type InputHTMLAttributes } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type InputHTMLAttributes } from "react";
 import {
   FolderOpen,
   Play,
@@ -325,14 +325,15 @@ export function Player() {
         </div>
       </header>
 
-      <section className="stage">
+      <section className={"stage " + (current?.kind === "audio" && playing ? "audioPlaying" : "")}>
         {current?.kind === "video" ? (
           <video ref={(node) => { media.current = node; }} src={current.url} playsInline onError={() => { setPlaying(false); setStatus("This video format is not supported by your browser"); }} />
         ) : (
           <div className="art">
-            <Music2 size={72} />
+            {current?.cover ? <img className="cover" src={current.cover} alt="" /> : <div className="disc"><Music2 size={54} /></div>}
+            <div className="wave" aria-hidden="true">{Array.from({ length: 24 }, (_, i) => <i key={i} style={{ "--i": i } as CSSProperties} />)}</div>
             <strong>{current?.name || "Mortimer Player"}</strong>
-            <small>{current ? "Ready to play" : status}</small>
+            <small>{current ? [current.artist, current.album].filter(Boolean).join(" • ") || "Ready to play" : status}</small>
           </div>
         )}
         {current?.kind === "audio" && <audio ref={(node) => { media.current = node; }} src={current.url} preload="metadata" onError={() => { setPlaying(false); setStatus("This audio format is not supported by your browser"); }} />}
