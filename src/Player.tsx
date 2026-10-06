@@ -59,7 +59,6 @@ export function Player() {
   const [search, setSearch] = useState("");
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [showQueue, setShowQueue] = useState(false);
-  const [libraryMode, setLibraryMode] = useState<"songs" | "artists" | "albums">("songs");
   const [libraryPersistent, setLibraryPersistent] = useState(true);
   const wakeLock = useRef<WakeLockSentinel | null>(null);
 
@@ -212,7 +211,8 @@ export function Player() {
       }
     }
     for (const file of files) {
-      let artist = "", album = "", genre = "", cover = "";
+      let artist = "", album = "", genre = "", coverUrl = "";
+      let coverBlob: Blob | undefined;
       if (kindOf(file.name) === "audio") {
         try {
           const meta = parseBlob ? await parseBlob(file) : null;
@@ -220,13 +220,16 @@ export function Player() {
           album = meta?.common.album || "";
           genre = meta?.common.genre?.[0] || "";
           const picture = meta?.common.picture?.[0];
-          if (picture) cover = URL.createObjectURL(new Blob([picture.data], { type: picture.format }));
+          if (picture) {
+            coverBlob = new Blob([picture.data], { type: picture.format });
+            coverUrl = URL.createObjectURL(coverBlob);
+          }
         } catch {}
       }
       const id = crypto.randomUUID();
       const fileUrl = URL.createObjectURL(file);
-      added.push({ id, name: file.name, url: fileUrl, kind: kindOf(file.name), size: file.size, path: file.name, artist, album, genre, cover });
-      stored.push({ id, name: file.name, kind: kindOf(file.name), path: file.name, size: file.size, lastModified: file.lastModified, file, artist, album, genre });
+      added.push({ id, name: file.name, url: fileUrl, kind: kindOf(file.name), size: file.size, path: file.name, artist, album, genre, cover: coverUrl });
+      stored.push({ id, name: file.name, kind: kindOf(file.name), path: file.name, size: file.size, lastModified: file.lastModified, file, artist, album, genre, cover: coverBlob });
     }
     try {
       await saveLibrary(stored);
@@ -442,7 +445,7 @@ export function Player() {
       <nav className="mobileNav">
         <button className={!showQueue ? "active" : ""} onClick={() => setShowQueue(false)}><Music2/><span>Player</span></button>
         <button className={showQueue ? "active" : ""} onClick={() => setShowQueue(true)}><FolderOpen/><span>Queue</span><b>{items.length}</b></button>
-        <button onClick={openFolder}><FolderOpen/><span>Library</span></button>
+        <button className={showQueue ? "active" : ""} onClick={() => { setLibraryTab("artists"); setShowQueue(true); }}><Music2/><span>Library</span></button>
       </nav>
       <section className={"queue " + (showQueue ? "mobileOpen" : "")}>
         <div className="libraryHead"><div className="queueTitle"><b>LIBRARY</b><span>{items.length} tracks</span></div><input className="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search music" /><div className="tabs"><button className={libraryTab === "songs" ? "active" : ""} onClick={() => setLibraryTab("songs")}>Songs</button><button className={libraryTab === "artists" ? "active" : ""} onClick={() => setLibraryTab("artists")}>Artists</button><button className={libraryTab === "albums" ? "active" : ""} onClick={() => setLibraryTab("albums")}>Albums</button></div></div>
