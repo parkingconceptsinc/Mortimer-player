@@ -170,7 +170,7 @@ export function Player() {
     }
   }, [current]);
 
-  function addFiles(list: FileList | File[]) {
+  async function addFiles(list: FileList | File[]) {
     const files = Array.from(list).filter((file) => supported(file.name));
     if (!files.length) {
       setStatus("No supported audio/video files found");
@@ -392,7 +392,7 @@ export function Player() {
         <button onClick={openFolder}><FolderOpen/><span>Library</span></button>
       </nav>
       <section className={"queue " + (showQueue ? "mobileOpen" : "")}>
-        <div className="queueTitle"><b>QUEUE</b><span>{items.length} items</span></div>
+        <div className="libraryHead"><div className="queueTitle"><b>LIBRARY</b><span>{items.length} tracks</span></div><input className="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search music" /><div className="tabs"><button className={libraryTab === "songs" ? "active" : ""} onClick={() => setLibraryTab("songs")}>Songs</button><button className={libraryTab === "artists" ? "active" : ""} onClick={() => setLibraryTab("artists")}>Artists</button><button className={libraryTab === "albums" ? "active" : ""} onClick={() => setLibraryTab("albums")}>Albums</button></div></div>
         {!items.length && <div className="empty">{status}</div>}
         {libraryTab !== "songs" && groups.map((group) => <button className="row" key={group} onClick={() => { setSearch(group === "Unknown" ? "" : group); setLibraryTab("songs"); }}><span><Music2/></span><div><b>{group}</b><small>{libraryTab === "artists" ? "Artist" : "Album"}</small></div></button>)}
         {libraryTab === "songs" && filtered.map((item) => { const i = items.indexOf(item); return (
