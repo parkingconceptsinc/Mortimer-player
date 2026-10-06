@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { parseBlob } from "music-metadata-browser";
 import {
   FolderOpen,
   Play,
@@ -178,15 +177,23 @@ export function Player() {
     }
 
     const added: Item[] = [];
+    let parseBlob: ((file: Blob) => Promise<any>) | undefined;
+    if (files.some((file) => kindOf(file.name) === "audio")) {
+      try {
+        ({ parseBlob } = await import("music-metadata-browser"));
+      } catch {
+        setStatus("Metadata reader unavailable; files can still be played");
+      }
+    }
     for (const file of files) {
       let artist = "", album = "", genre = "", cover = "";
       if (kindOf(file.name) === "audio") {
         try {
-          const meta = await parseBlob(file);
-          artist = meta.common.artist || "";
-          album = meta.common.album || "";
-          genre = meta.common.genre?.[0] || "";
-          const picture = meta.common.picture?.[0];
+          const meta = parseBlob ? await parseBlob(file) : null;
+          artist = meta?.common.artist || "";
+          album = meta?.common.album || "";
+          genre = meta?.common.genre?.[0] || "";
+          const picture = meta?.common.picture?.[0];
           if (picture) cover = URL.createObjectURL(new Blob([picture.data], { type: picture.format }));
         } catch {}
       }
