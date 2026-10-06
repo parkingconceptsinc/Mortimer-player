@@ -204,11 +204,18 @@ export function Player() {
   }
 
   async function openFolder() {
+    type DirectoryEntry = {
+      kind: "file" | "directory";
+      name: string;
+      getFile?: () => Promise<File>;
+      values?: () => AsyncIterable<DirectoryEntry>;
+    };
+    type DirectoryHandleLike = {
+      name: string;
+      values: () => AsyncIterable<DirectoryEntry>;
+    };
     const picker = (window as Window & {
-      showDirectoryPicker?: (options?: { mode?: "read" | "readwrite" }) => Promise<{
-        name: string;
-        values: () => AsyncIterable<FileSystemFileHandle | FileSystemDirectoryHandle>;
-      }>;
+      showDirectoryPicker?: (options?: { mode?: "read" | "readwrite" }) => Promise<DirectoryHandleLike>;
     }).showDirectoryPicker;
 
     if (!picker) {
@@ -222,18 +229,18 @@ export function Player() {
       const found: File[] = [];
 
       async function walk(
-        dir: FileSystemDirectoryHandle,
+        dir: DirectoryHandleLike,
         prefix = ""
       ): Promise<void> {
         for await (const entry of dir.values()) {
           const path = prefix ? `${prefix}/${entry.name}` : entry.name;
           if (entry.kind === "file") {
-            const file = await entry.getFile();
+            const file = await entry.getFile!();
             if (supported(file.name)) {
               found.push(new File([file], file.name, { type: file.type, lastModified: file.lastModified }));
             }
           } else {
-            await walk(entry, path);
+            await walk(entry as DirectoryHandleLike, path);
           }
         }
       }
@@ -320,7 +327,7 @@ export function Player() {
 
       <section className="stage">
         {current?.kind === "video" ? (
-          <video ref={media} src={current.url} playsInline />
+          <video ref={(node) => { media.current = node; }} src={current.url} playsInline />
         ) : (
           <div className="art">
             <Music2 size={72} />
@@ -328,7 +335,7 @@ export function Player() {
             <small>{current ? "Ready to play" : status}</small>
           </div>
         )}
-        {current?.kind === "audio" && <audio ref={media} src={current.url} preload="metadata" />}
+        {current?.kind === "audio" && <audio ref={(node) => { media.current = node; }} src={current.url} preload="metadata" />}
       </section>
 
       <section className="now">
