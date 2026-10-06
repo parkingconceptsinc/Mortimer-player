@@ -1,4 +1,4 @@
-const CACHE = "mortimer-shell-v2";
+const CACHE = "mortimer-shell-v3";
 const SHELL = [
   "/Mortimer-player/",
   "/Mortimer-player/manifest.webmanifest",
