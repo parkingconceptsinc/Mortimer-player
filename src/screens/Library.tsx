@@ -194,7 +194,7 @@ export const Library = memo(function Library({ active }: { active: boolean }) {
   return (
     <section className="screen library" hidden={!active} ref={scroller} onScroll={(e) => scrollMemory.current.set(routeKey + routes.length, e.currentTarget.scrollTop)}>
       <ScreenHeader title={title} subtitle={subtitle} onBack={onBack}>
-        {route.view === "home" && (
+        {true && (
           <>
             <button className="iconBtn" aria-label="Add folder" title="Add folder" onClick={actions.importFolder}><FolderOpen size={20} /></button>
             <button className="iconBtn" aria-label="Add files" title="Add files" onClick={actions.importFiles}><FilePlus size={20} /></button>
