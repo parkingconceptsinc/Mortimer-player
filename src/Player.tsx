@@ -24,7 +24,7 @@ import { readEpubInfo } from "./epub";
 const NAV: Array<[Screen, string, string, LucideIcon, boolean]> = [
   ["library", "Music", "Music", LibraryIcon, true],
   ["videos", "Videos", "Videos", Clapperboard, true],
-  ["comics", "Books & Comics", "Read", BookOpen, true],
+  ["comics", "Books & Comics", "Books", BookOpen, true],
   ["player", "Now Playing", "Playing", Disc3, true],
   ["queue", "Queue", "Queue", ListMusic, false],
   ["eq", "Equalizer", "EQ", SlidersHorizontal, false],
