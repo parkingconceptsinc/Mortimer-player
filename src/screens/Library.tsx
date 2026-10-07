@@ -101,7 +101,7 @@ export const Library = memo(function Library({ active }: { active: boolean }) {
   const q = query.trim().toLowerCase();
 
   let content: ReactNode;
-  let title = "Library";
+  let title = "Music";
   let subtitle: string | undefined;
   let searchable = true;
 
