@@ -225,8 +225,8 @@ function EmptyLibrary() {
   const { actions } = usePlayer();
   return (
     <div className="emptyState welcome">
-      <div className="heroDisc"><Disc3 /></div>
-      <h2>Build your library</h2>
+      <img className="welcomeLogo" src={`${import.meta.env.BASE_URL}logo.png`} alt="6" />
+      <h2>Welcome to 6</h2>
       <p>Add a music folder or individual files. Everything stays on this device — tags, album art and playlists included.</p>
       <div className="heroActions">
         <button className="btn primary" onClick={actions.importFolder}><FolderOpen size={18} /> Add music folder</button>

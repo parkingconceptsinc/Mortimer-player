@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Download, FilePlus, FolderOpen, HardDrive, Keyboard, Trash2 } from "lucide-react";
+import { ChevronRight, Download, FilePlus, FolderOpen, HardDrive, Keyboard, ListMusic, SlidersHorizontal, Trash2 } from "lucide-react";
 import { usePlayer } from "../context";
 import { ScreenHeader, Toggle } from "../components";
 import type { VideoFit } from "../types";
@@ -26,6 +26,15 @@ export function Settings() {
   return (
     <section className="screen settingsScreen">
       <ScreenHeader title="Settings" />
+
+      <Card title="Audio">
+        <button className="settingLink" onClick={() => actions.goTo("eq")}>
+          <SlidersHorizontal size={20} /><span>Equalizer<small>{p.eq.enabled ? p.eq.preset : "Off"}{p.boost !== 1 ? ` · boost ${Math.round(p.boost * 100)}%` : ""}</small></span><ChevronRight size={18} />
+        </button>
+        <button className="settingLink" onClick={() => actions.goTo("queue")}>
+          <ListMusic size={20} /><span>Queue<small>{p.queue.length ? `${p.queue.length} tracks` : "Empty"}</small></span><ChevronRight size={18} />
+        </button>
+      </Card>
 
       <Card title="Playback">
         <Row label="Skip interval" hint="Used by the ±buttons, double-tap on video, keyboard and lock screen">
@@ -77,17 +86,17 @@ export function Settings() {
           )}
         </Row>
         <button className="btn danger wide" disabled={!p.tracks.length} onClick={() => {
-          if (window.confirm("Remove every song and video from Mortimer? Your original files are not touched.")) actions.clearLibrary();
+          if (window.confirm("Remove every song and video from the app? Your original files are not touched.")) actions.clearLibrary();
         }}><Trash2 size={16} /> Clear library</button>
       </Card>
 
       <Card title="App">
-        {p.canInstall && <button className="btn primary wide" onClick={actions.install}><Download size={17} /> Install Mortimer Player</button>}
+        {p.canInstall && <button className="btn primary wide" onClick={actions.install}><Download size={17} /> Install 6</button>}
         <details className="shortcuts">
           <summary><Keyboard size={17} /> Keyboard shortcuts</summary>
           <dl>{SHORTCUTS.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
         </details>
-        <p className="hint">Mortimer Player · everything stays on this device. Swipe the album art to change tracks; double-tap the left or right of a video to skip.</p>
+        <p className="hint">6 · everything stays on this device. Swipe the album art to change tracks; double-tap the left or right of a video to skip.</p>
       </Card>
     </section>
   );

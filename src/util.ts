@@ -42,6 +42,8 @@ export function shuffled<T>(list: T[]) {
 }
 
 export const ACCENTS: Record<string, string> = {
+  "Neon Red": "#ff2d3a",
+  "Neon Blue": "#3ea6ff",
   Coral: "#ff7849",
   Amber: "#ffb020",
   Lime: "#a3e635",

@@ -1,7 +1,7 @@
 {
   "name": "mortimer-player",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,6 +12,8 @@
     "@vitejs/plugin-react": "latest",
     "lucide-react": "latest",
     "music-metadata": "latest",
+    "node-unrar-js": "^2.0.2",
+    "pdfjs-dist": "^6.4.299",
     "react": "latest",
     "react-dom": "latest",
     "typescript": "latest",

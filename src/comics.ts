@@ -1,0 +1,233 @@
+import type { Comic, ComicFormat } from "./types";
+import type { StoredComic } from "./library";
+import { folderOf, stripExt } from "./util";
+
+export const isComicFile = (name: string) => /\.(cbz|cbr|pdf)$/i.test(name);
+export const comicFormatOf = (name: string): ComicFormat => (/\.cbr$/i.test(name) ? "cbr" : /\.pdf$/i.test(name) ? "pdf" : "cbz");
+export const comicTitle = (name: string) => stripExt(name).replace(/_+/g, " ").replace(/\s+/g, " ").trim();
+
+export function toComic(x: StoredComic): Comic {
+  return {
+    id: x.id,
+    name: x.name,
+    title: comicTitle(x.name),
+    path: x.path,
+    folder: folderOf(x.path),
+    size: x.size,
+    lastModified: x.lastModified,
+    addedAt: x.addedAt,
+    format: x.format,
+    pages: x.pages,
+    file: x.file,
+    cover: x.cover ? URL.createObjectURL(x.cover) : undefined,
+  };
+}
+
+export type ComicSource = {
+  pages: number;
+  getPage(index: number): Promise<Blob>;
+  close(): void;
+};
+
+const IMAGE = /\.(jpe?g|png|gif|webp|avif|bmp|jxl)$/i;
+const MIME: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp", avif: "image/avif", bmp: "image/bmp", jxl: "image/jxl" };
+const mimeOf = (name: string) => MIME[name.split(".").pop()!.toLowerCase()] ?? "application/octet-stream";
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+const isPage = (name: string) => IMAGE.test(name) && !name.includes("__MACOSX") && !name.split("/").pop()!.startsWith(".");
+
+export async function openComic(file: Blob, onProgress?: (fraction: number) => void): Promise<ComicSource> {
+  const head = new Uint8Array(await file.slice(0, 6).arrayBuffer());
+  const magic = String.fromCharCode(...head);
+  if (magic.startsWith("PK")) return openZip(file);
+  if (magic.startsWith("Rar!")) return openRar(file, onProgress);
+  if (magic.startsWith("%PDF")) return openPdf(file);
+  if (head[0] === 0x37 && head[1] === 0x7a && head[2] === 0xbc) throw new Error("7-Zip comics (CB7) aren't supported yet — convert them to CBZ.");
+  throw new Error("This file isn't a comic archive this app can read, or it's damaged.");
+}
+
+// ---------- CBZ: reads the ZIP directory and inflates one page at a time ----------
+
+type ZipEntry = { name: string; method: number; compSize: number; offset: number; flags: number };
+
+async function readZipEntries(file: Blob): Promise<ZipEntry[]> {
+  const tailLength = Math.min(file.size, 22 + 0xffff + 20);
+  const tail = new DataView(await file.slice(file.size - tailLength).arrayBuffer());
+  let eocd = -1;
+  for (let i = tail.byteLength - 22; i >= 0; i--) {
+    if (tail.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error("This archive looks damaged (no ZIP directory found).");
+  let count = tail.getUint16(eocd + 10, true);
+  let cdSize = tail.getUint32(eocd + 12, true);
+  let cdOffset = tail.getUint32(eocd + 16, true);
+  if ((count === 0xffff || cdSize === 0xffffffff || cdOffset === 0xffffffff) && eocd >= 20 && tail.getUint32(eocd - 20, true) === 0x07064b50) {
+    const z64 = Number(tail.getBigUint64(eocd - 12, true));
+    const z = new DataView(await file.slice(z64, z64 + 56).arrayBuffer());
+    if (z.getUint32(0, true) === 0x06064b50) {
+      count = Number(z.getBigUint64(32, true));
+      cdSize = Number(z.getBigUint64(40, true));
+      cdOffset = Number(z.getBigUint64(48, true));
+    }
+  }
+  const cd = new DataView(await file.slice(cdOffset, cdOffset + cdSize).arrayBuffer());
+  const bytes = new Uint8Array(cd.buffer);
+  const decoder = new TextDecoder();
+  const entries: ZipEntry[] = [];
+  let p = 0;
+  for (let i = 0; i < count && p + 46 <= cd.byteLength && cd.getUint32(p, true) === 0x02014b50; i++) {
+    const flags = cd.getUint16(p + 8, true);
+    const method = cd.getUint16(p + 10, true);
+    let compSize = cd.getUint32(p + 20, true);
+    let size = cd.getUint32(p + 24, true);
+    const nameLength = cd.getUint16(p + 28, true);
+    const extraLength = cd.getUint16(p + 30, true);
+    const commentLength = cd.getUint16(p + 32, true);
+    let offset = cd.getUint32(p + 42, true);
+    const name = decoder.decode(bytes.subarray(p + 46, p + 46 + nameLength));
+    let e = p + 46 + nameLength;
+    const extraEnd = e + extraLength;
+    while (e + 4 <= extraEnd) {
+      const id = cd.getUint16(e, true);
+      const length = cd.getUint16(e + 2, true);
+      if (id === 0x0001) {
+        let q = e + 4;
+        if (size === 0xffffffff) { size = Number(cd.getBigUint64(q, true)); q += 8; }
+        if (compSize === 0xffffffff) { compSize = Number(cd.getBigUint64(q, true)); q += 8; }
+        if (offset === 0xffffffff) offset = Number(cd.getBigUint64(q, true));
+      }
+      e += 4 + length;
+    }
+    entries.push({ name, method, compSize, offset, flags });
+    p = extraEnd + commentLength;
+  }
+  return entries;
+}
+
+async function openZip(file: Blob): Promise<ComicSource> {
+  const entries = (await readZipEntries(file)).filter((e) => isPage(e.name)).sort((a, b) => collator.compare(a.name, b.name));
+  if (!entries.length) throw new Error("No images were found inside this comic.");
+  return {
+    pages: entries.length,
+    async getPage(index) {
+      const entry = entries[index];
+      if (entry.flags & 1) throw new Error("Password-protected comics aren't supported.");
+      const local = new DataView(await file.slice(entry.offset, entry.offset + 30).arrayBuffer());
+      if (local.getUint32(0, true) !== 0x04034b50) throw new Error(`Page ${index + 1} is damaged.`);
+      const start = entry.offset + 30 + local.getUint16(26, true) + local.getUint16(28, true);
+      const raw = file.slice(start, start + entry.compSize);
+      const type = mimeOf(entry.name);
+      if (entry.method === 0) return new Blob([raw], { type });
+      if (entry.method !== 8) throw new Error(`Page ${index + 1} uses a compression method that isn't supported.`);
+      if (typeof DecompressionStream === "undefined") throw new Error("Update your browser to read CBZ comics.");
+      const inflated = await new Response(raw.stream().pipeThrough(new DecompressionStream("deflate-raw"))).blob();
+      return new Blob([inflated], { type });
+    },
+    close() {},
+  };
+}
+
+// ---------- CBR: unrar compiled to WebAssembly, pages extracted in the background ----------
+
+async function openRar(file: Blob, onProgress?: (fraction: number) => void): Promise<ComicSource> {
+  const [{ createExtractorFromData }, wasm] = await Promise.all([import("node-unrar-js"), import("node-unrar-js/esm/js/unrar.wasm?url")]);
+  const [wasmBinary, data] = await Promise.all([fetch(wasm.default).then((r) => r.arrayBuffer()), file.arrayBuffer()]);
+  const extractor = await createExtractorFromData({ wasmBinary, data });
+  const names = [...extractor.getFileList().fileHeaders].filter((h) => !h.flags.directory && isPage(h.name)).map((h) => h.name).sort(collator.compare);
+  if (!names.length) throw new Error("No images were found inside this comic.");
+  const wanted = new Set(names);
+  const blobs = new Map<string, Blob>();
+  const waiting = new Map<string, Array<{ resolve: (b: Blob) => void; reject: (e: Error) => void }>>();
+  let failure: Error | null = null;
+  let closed = false;
+
+  void (async () => {
+    try {
+      const { files } = extractor.extract({ files: (h) => wanted.has(h.name) });
+      let done = 0;
+      for (const f of files) {
+        if (closed) return;
+        const name = f.fileHeader.name;
+        if (f.extraction) {
+          const blob = new Blob([new Uint8Array(f.extraction)], { type: mimeOf(name) });
+          blobs.set(name, blob);
+          waiting.get(name)?.forEach((w) => w.resolve(blob));
+          waiting.delete(name);
+        }
+        onProgress?.(++done / names.length);
+        await new Promise((r) => setTimeout(r, 0));
+      }
+    } catch (error) {
+      failure = error instanceof Error ? error : new Error("Couldn't extract this comic.");
+    }
+    for (const list of waiting.values()) list.forEach((w) => w.reject(failure ?? new Error("Page not found in archive.")));
+    waiting.clear();
+  })();
+
+  return {
+    pages: names.length,
+    getPage(index) {
+      const name = names[index];
+      const ready = blobs.get(name);
+      if (ready) return Promise.resolve(ready);
+      if (failure) return Promise.reject(failure);
+      return new Promise((resolve, reject) => {
+        const list = waiting.get(name) ?? [];
+        list.push({ resolve, reject });
+        waiting.set(name, list);
+      });
+    },
+    close() {
+      closed = true;
+      blobs.clear();
+    },
+  };
+}
+
+// ---------- PDF: pages rendered with pdf.js at screen resolution ----------
+
+async function openPdf(file: Blob): Promise<ComicSource> {
+  const [pdfjs, worker] = await Promise.all([import("pdfjs-dist"), import("pdfjs-dist/build/pdf.worker.min.mjs?url")]);
+  pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+  const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+  const doc = await task.promise;
+  return {
+    pages: doc.numPages,
+    async getPage(index) {
+      const page = await doc.getPage(index + 1);
+      const base = page.getViewport({ scale: 1 });
+      const targetWidth = Math.min(2200, Math.max(1100, window.innerWidth * (window.devicePixelRatio || 1)));
+      const viewport = page.getViewport({ scale: targetWidth / base.width });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      await page.render({ canvas, viewport }).promise;
+      page.cleanup();
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+      if (!blob) throw new Error(`Couldn't render page ${index + 1}.`);
+      return blob;
+    },
+    close() {
+      void task.destroy();
+    },
+  };
+}
+
+export async function makeThumbnail(blob: Blob, width = 320): Promise<Blob | null> {
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = new Image();
+    img.decoding = "async";
+    img.src = url;
+    await img.decode();
+    const scale = Math.min(1, width / img.naturalWidth);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.8));
+  } catch {
+    return null;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}

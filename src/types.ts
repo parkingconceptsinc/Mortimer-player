@@ -25,7 +25,35 @@ export type RepeatMode = "off" | "all" | "one";
 
 export type Playlist = { id: string; name: string; trackIds: string[]; createdAt: number };
 
-export type Screen = "library" | "videos" | "player" | "queue" | "eq" | "settings";
+export type Screen = "library" | "videos" | "comics" | "player" | "queue" | "eq" | "settings";
+
+export type ComicFormat = "cbz" | "cbr" | "pdf";
+
+export type Comic = {
+  id: string;
+  name: string;
+  title: string;
+  path: string;
+  folder: string;
+  size: number;
+  lastModified: number;
+  addedAt: number;
+  format: ComicFormat;
+  pages?: number;
+  file: Blob;
+  cover?: string;
+};
+
+export type ComicProgress = { page: number; pages: number; at: number };
+
+export type ReaderSettings = {
+  mode: "paged" | "double" | "vertical";
+  direction: "ltr" | "rtl";
+  fit: "screen" | "width" | "height";
+  background: "black" | "gray" | "white";
+  tapZones: boolean;
+  keepAwake: boolean;
+};
 
 export type Route =
   | { view: "home" }
@@ -52,3 +80,5 @@ export type VideoFit = "contain" | "cover" | "fill";
 export type SongSort = "title" | "artist" | "album" | "added" | "duration" | "plays";
 
 export type VideoSort = "added" | "title" | "duration" | "size";
+
+export type ComicSort = "recent" | "added" | "title";

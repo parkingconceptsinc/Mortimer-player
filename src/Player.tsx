@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type InputHTMLAttributes } from "react";
-import { Clapperboard, Disc3, Download, FilePlus, FolderOpen, Library as LibraryIcon, ListMusic, Settings as SettingsIcon, SlidersHorizontal, type LucideIcon } from "lucide-react";
+import { BookOpen, Clapperboard, Disc3, Download, FilePlus, FolderOpen, Library as LibraryIcon, ListMusic, Settings as SettingsIcon, SlidersHorizontal, type LucideIcon } from "lucide-react";
 import { applyAudio, attachElement, EQ_PRESETS, initEngine, resumeEngine } from "./audioEngine";
 import { PlayerContext, ProgressContext, type Actions, type MenuTarget, type PlayerState, type SleepState } from "./context";
-import { clearLibrary as clearStoredLibrary, deleteTracks, loadLibrary, patchTrack, saveLibrary, type StoredLibraryItem } from "./library";
+import { clearLibrary as clearStoredLibrary, deleteComics, deleteTracks, loadComics, loadLibrary, patchComic, patchTrack, saveComics, saveLibrary, type StoredComic, type StoredLibraryItem } from "./library";
+import { comicFormatOf, isComicFile, makeThumbnail, openComic, toComic } from "./comics";
 import { readItem, type Incoming } from "./metadata";
 import { readPref, usePref, writePref } from "./prefs";
-import type { EqSettings, Playlist, RepeatMode, Route, Screen, SongSort, Track, VideoFit } from "./types";
+import type { Comic, ComicProgress, EqSettings, Playlist, ReaderSettings, RepeatMode, Route, Screen, SongSort, Track, VideoFit } from "./types";
 import { ACCENTS, compareText, formatTime, shuffled, srtToVtt, supported, toTrack, trackKey } from "./util";
 import { captureVideoFrame } from "./thumbnails";
 import { MiniPlayer, TrackMenu } from "./components";
@@ -15,15 +16,21 @@ import { Queue } from "./screens/Queue";
 import { Equalizer } from "./screens/Equalizer";
 import { Settings } from "./screens/Settings";
 import { Videos } from "./screens/Videos";
+import { Comics } from "./screens/Comics";
+import { ComicReader } from "./screens/ComicReader";
 
-const NAV: Array<[Screen, string, string, LucideIcon]> = [
-  ["library", "Library", "Music", LibraryIcon],
-  ["videos", "Videos", "Videos", Clapperboard],
-  ["player", "Now Playing", "Playing", Disc3],
-  ["queue", "Queue", "Queue", ListMusic],
-  ["eq", "Equalizer", "EQ", SlidersHorizontal],
-  ["settings", "Settings", "Settings", SettingsIcon],
+const NAV: Array<[Screen, string, string, LucideIcon, boolean]> = [
+  ["library", "Library", "Music", LibraryIcon, true],
+  ["videos", "Videos", "Videos", Clapperboard, true],
+  ["comics", "Comics", "Comics", BookOpen, true],
+  ["player", "Now Playing", "Playing", Disc3, true],
+  ["queue", "Queue", "Queue", ListMusic, false],
+  ["eq", "Equalizer", "EQ", SlidersHorizontal, false],
+  ["settings", "Settings", "Settings", SettingsIcon, true],
 ];
+
+const DEFAULT_READER: ReaderSettings = { mode: "paged", direction: "ltr", fit: "screen", background: "black", tapZones: true, keepAwake: true };
+const comicCoverAttempted = new Set<string>();
 
 const thumbAttempted = new Set<string>();
 
@@ -47,6 +54,7 @@ export function Player() {
   const engineStarted = useRef(false);
   const toastTimer = useRef<number | undefined>(undefined);
   const thumbBusy = useRef(false);
+  const comicBusy = useRef(false);
   const returnScreen = useRef<Screen>("library");
   const loadedTrack = useRef<{ id: string; kind: Track["kind"] } | null>(null);
 
@@ -71,10 +79,14 @@ export function Player() {
   const [videoFit, setVideoFit] = usePref<VideoFit>("videoFit", "contain");
   const [subtitleSize, setSubtitleSize] = usePref("subtitleSize", 100);
   const [showRemaining, setShowRemaining] = usePref("showRemaining", false);
-  const [accent, setAccent] = usePref("accent", "Coral");
+  const [accent, setAccent] = usePref("accent", "Neon Red");
   const [songSort, setSongSort] = usePref<SongSort>("songSort", "title");
   const [favoritesList, setFavoritesList] = usePref<string[]>("favorites", []);
   const [videoProgress, setVideoProgress] = usePref<Record<string, number>>("videoProgress", {});
+  const [comics, setComics] = useState<Comic[]>([]);
+  const [comicProgress, setComicProgress] = usePref<Record<string, ComicProgress>>("comicProgress", {});
+  const [readerSettings, setReaderSettings] = usePref<ReaderSettings>("readerSettings", DEFAULT_READER);
+  const [reader, setReader] = useState<{ id: string; start: number | null } | null>(null);
   const [plays, setPlays] = usePref<Record<string, number>>("plays", {});
   const [lastPlayed, setLastPlayed] = usePref<Record<string, number>>("lastPlayed", {});
   const [playlists, setPlaylists] = usePref<Playlist[]>("playlists", []);
@@ -92,6 +104,12 @@ export function Player() {
   const [menu, setMenu] = useState<MenuTarget | null>(null);
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [thumbTick, setThumbTick] = useState(0);
+
+  useEffect(() => {
+    if (readPref("brandSix", false)) return;
+    writePref("brandSix", true);
+    setAccent("Neon Red");
+  }, []);
 
   const trackMap = useMemo(() => new Map(tracks.map((t) => [t.id, t])), [tracks]);
   const favorites = useMemo(() => new Set(favoritesList), [favoritesList]);
@@ -114,6 +132,7 @@ export function Player() {
 
   function handleBack() {
     if (menu) setMenu(null);
+    else if (reader) setReader(null);
     else if (screen === "player" && returnScreen.current !== "player") setScreen(returnScreen.current);
     else if (screen !== "library") setScreen("library");
     else if (routes.length > 1) setRoutes((r) => r.slice(0, -1));
@@ -202,23 +221,33 @@ export function Player() {
   }
 
   async function importEntries(entries: Incoming[], label?: string) {
-    const seen = new Set(tracks.map((t) => trackKey(t.path, t.size, t.lastModified)));
-    const fresh = entries.filter(({ file, path }) => {
-      if (!supported(file.name)) return false;
+    const seen = new Set([...tracks, ...comics].map((t) => trackKey(t.path, t.size, t.lastModified)));
+    const isNew = ({ file, path }: Incoming) => {
       const key = trackKey(path, file.size, file.lastModified);
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
-    });
-    if (!fresh.length) {
-      toast(entries.some((e) => supported(e.file.name)) ? "Those files are already in your library" : "No supported audio or video files found");
+    };
+    const fresh = entries.filter((e) => supported(e.file.name) && isNew(e));
+    const freshComics = entries.filter((e) => isComicFile(e.file.name) && isNew(e));
+    if (!fresh.length && !freshComics.length) {
+      toast(entries.some((e) => supported(e.file.name) || isComicFile(e.file.name)) ? "Those files are already in your library" : "No supported music, video or comic files found");
       return;
     }
     void navigator.storage?.persist?.().catch(() => false);
-    setImporting({ done: 0, total: fresh.length });
     const addedAt = Date.now();
-    let batch: StoredLibraryItem[] = [];
     let storageOk = true;
+
+    if (freshComics.length) {
+      const items: StoredComic[] = freshComics.map(({ file, path }, i) => ({
+        id: crypto.randomUUID(), name: file.name, path, size: file.size, lastModified: file.lastModified, addedAt: addedAt + i, format: comicFormatOf(file.name), file,
+      }));
+      try { await saveComics(items); } catch { storageOk = false; }
+      setComics((old) => [...old, ...items.map(toComic)]);
+    }
+
+    if (fresh.length) setImporting({ done: 0, total: fresh.length });
+    let batch: StoredLibraryItem[] = [];
     const flush = async () => {
       const items = batch;
       batch = [];
@@ -235,7 +264,11 @@ export function Player() {
     }
     await flush();
     setImporting(null);
-    const what = `${fresh.length} file${fresh.length === 1 ? "" : "s"} added${label ? ` from “${label}”` : ""}`;
+    const parts = [
+      fresh.length ? `${fresh.length} song${fresh.length === 1 ? "" : "s"}/video${fresh.length === 1 ? "" : "s"}` : "",
+      freshComics.length ? `${freshComics.length} comic${freshComics.length === 1 ? "" : "s"}` : "",
+    ].filter(Boolean).join(" and ");
+    const what = `${parts} added${label ? ` from “${label}”` : ""}`;
     toast(storageOk ? what : `${what}, but they couldn't be saved for next time`);
   }
 
@@ -252,7 +285,7 @@ export function Player() {
         for await (const entry of dir.values()) {
           const path = `${prefix}/${entry.name}`;
           if (entry.kind === "file") {
-            if (supported(entry.name) && entry.getFile) found.push({ file: await entry.getFile(), path });
+            if ((supported(entry.name) || isComicFile(entry.name)) && entry.getFile) found.push({ file: await entry.getFile(), path });
           } else if (!entry.name.startsWith(".")) {
             await walk(entry as DirectoryHandleLike, path);
           }
@@ -521,6 +554,34 @@ export function Player() {
       void installEvent.prompt().finally(() => setInstallEvent(null));
     },
     toast,
+    openComic(id, options) {
+      setReader({ id, start: options?.fromStart ? 0 : null });
+      pushHistory();
+    },
+    closeComic() {
+      if (pushedHistory.current > 0) history.back();
+      else setReader(null);
+    },
+    setComicProgress(id, progress) {
+      setComicProgress((p) => {
+        const copy = { ...p };
+        if (progress) copy[id] = progress;
+        else delete copy[id];
+        return copy;
+      });
+    },
+    setReaderSettings,
+    removeComics(ids) {
+      const gone = new Set(ids);
+      setComics((old) => {
+        for (const c of old) if (gone.has(c.id) && c.cover) URL.revokeObjectURL(c.cover);
+        return old.filter((c) => !gone.has(c.id));
+      });
+      setComicProgress((p) => Object.fromEntries(Object.entries(p).filter(([id]) => !gone.has(id))));
+      if (reader && gone.has(reader.id)) setReader(null);
+      void deleteComics(ids).catch(() => toast("Couldn't update local storage"));
+      toast(`${ids.length} comic${ids.length === 1 ? "" : "s"} removed`);
+    },
     openMenu(target) {
       setMenu(target);
       pushHistory();
@@ -661,6 +722,7 @@ export function Player() {
       const resume = readPref<{ id: string; time: number } | null>("resume", null);
       if (readPref("resumePosition", true) && resume && resume.id === kept[index]) pendingSeek.current = resume.time;
       setTracks(restored);
+      void loadComics().then((stored) => { if (!cancelled) setComics(stored.map(toComic).sort((a, b) => a.addedAt - b.addedAt)); }).catch(() => {});
       setQueue(kept);
       setQIndex(index);
       setLoaded(true);
@@ -765,6 +827,31 @@ export function Player() {
   }, [tracks, screen, thumbTick]);
 
   useEffect(() => {
+    if (screen !== "comics" || reader || comicBusy.current) return;
+    const next = comics.find((c) => (!c.cover || !c.pages) && !comicCoverAttempted.has(c.id));
+    if (!next) return;
+    comicCoverAttempted.add(next.id);
+    comicBusy.current = true;
+    void (async () => {
+      let pages: number | undefined;
+      let image: Blob | null = null;
+      try {
+        const source = await openComic(next.file);
+        pages = source.pages;
+        if (!next.cover) image = await makeThumbnail(await source.getPage(0), 360);
+        source.close();
+      } catch {}
+      comicBusy.current = false;
+      if (pages || image) {
+        const cover = image ? URL.createObjectURL(image) : undefined;
+        setComics((old) => old.map((c) => (c.id === next.id ? { ...c, cover: cover ?? c.cover, pages: pages ?? c.pages } : c)));
+        void patchComic(next.id, { ...(image ? { cover: image } : {}), ...(pages ? { pages } : {}) }).catch(() => {});
+      }
+      setThumbTick((n) => n + 1);
+    })();
+  }, [comics, screen, reader, thumbTick]);
+
+  useEffect(() => {
     if (!sleep.endsAt) return;
     const endsAt = sleep.endsAt;
     const tick = () => {
@@ -785,9 +872,9 @@ export function Player() {
     navigator.mediaSession.metadata = current
       ? new MediaMetadata({
           title: current.title,
-          artist: current.artist || "Mortimer Player",
+          artist: current.artist || "6",
           album: current.album,
-          artwork: current.cover ? [{ src: current.cover, sizes: "512x512" }] : [{ src: "/Mortimer-player/icon-512.svg", sizes: "512x512", type: "image/svg+xml" }],
+          artwork: current.cover ? [{ src: current.cover, sizes: "512x512" }] : [{ src: "/Mortimer-player/icon-512.png", sizes: "512x512", type: "image/png" }],
         })
       : null;
   }, [current?.id, current?.cover]);
@@ -832,7 +919,7 @@ export function Player() {
     };
     const onInstalled = () => {
       setInstallEvent(null);
-      toast("Mortimer Player installed");
+      toast("6 installed");
     };
     const onPop = () => {
       if (pushedHistory.current > 0) pushedHistory.current--;
@@ -892,11 +979,12 @@ export function Player() {
   const state: PlayerState = useMemo(() => ({
     loaded, tracks, trackMap, queue, qIndex, queueSource, current, playing, shuffle, repeat, volume, muted, speed, preservePitch,
     eq, customPresets, balance, boost, skipSeconds, resumePosition, videoFit, subtitleSize, showRemaining, accent, songSort,
-    favorites, videoProgress, plays, lastPlayed, playlists, screen, routes, sleep, sleepRemaining: sleepRemaining == null ? null : Math.ceil(sleepRemaining),
+    favorites, videoProgress, comics, comicProgress, readerSettings, readerId: reader?.id ?? null, readerStart: reader?.start ?? null,
+    plays, lastPlayed, playlists, screen, routes, sleep, sleepRemaining: sleepRemaining == null ? null : Math.ceil(sleepRemaining),
     ab, subtitles, importing, canInstall: !!installEvent, videoRef, actions,
   }), [loaded, tracks, trackMap, queue, qIndex, queueSource, current, playing, shuffle, repeat, volume, muted, speed, preservePitch,
     eq, customPresets, balance, boost, skipSeconds, resumePosition, videoFit, subtitleSize, showRemaining, accent, songSort,
-    favorites, videoProgress, plays, lastPlayed, playlists, screen, routes, sleep, sleepRemaining == null ? null : Math.ceil(sleepRemaining),
+    favorites, videoProgress, comics, comicProgress, readerSettings, reader, plays, lastPlayed, playlists, screen, routes, sleep, sleepRemaining == null ? null : Math.ceil(sleepRemaining),
     ab, subtitles, importing, installEvent, actions]);
 
   const progress = useMemo(() => ({ currentTime, duration }), [currentTime, duration]);
@@ -908,8 +996,8 @@ export function Player() {
         <div className={`shell screen-${screen}${current ? " hasCurrent" : ""}${screen === "player" && current?.kind === "video" ? " immersive" : ""}`} style={{ "--accent": accentColor } as CSSProperties}>
           <aside className="sidebar">
             <div className="brand">
-              <div className="logo"><Disc3 size={20} /></div>
-              <div><b>Mortimer</b><span>PLAYER</span></div>
+              <img className="logo" src={`${import.meta.env.BASE_URL}logo.png`} alt="" />
+              <b>6</b>
             </div>
             <nav>
               {NAV.map(([id, label, , Icon]) => (
@@ -930,6 +1018,7 @@ export function Player() {
             <Library active={screen === "library"} />
             <NowPlaying active={screen === "player"} />
             {screen === "videos" && <Videos />}
+            {screen === "comics" && <Comics />}
             {screen === "queue" && <Queue />}
             {screen === "eq" && <Equalizer />}
             {screen === "settings" && <Settings />}
@@ -938,7 +1027,7 @@ export function Player() {
           <MiniPlayer />
 
           <nav className="tabbar">
-            {NAV.map(([id, , short, Icon]) => (
+            {NAV.filter((n) => n[4]).map(([id, , short, Icon]) => (
               <button key={id} className={screen === id ? "active" : ""} onClick={() => actions.goTo(id)}>
                 <Icon size={21} /><span>{short}</span>
                 {id === "queue" && queue.length > 0 && <em>{queue.length > 99 ? "99+" : queue.length}</em>}
@@ -946,6 +1035,7 @@ export function Player() {
             ))}
           </nav>
 
+          {reader && <ComicReader key={reader.id} />}
           {menu && <TrackMenu target={menu} onClose={() => actions.back()} />}
           {importing && (
             <div className="importBar" role="status">
@@ -956,7 +1046,7 @@ export function Player() {
           {toastMessage && <div className="toast" role="status">{toastMessage}</div>}
 
           <audio ref={audioRef} preload="auto" />
-          <input ref={fileInput} hidden type="file" multiple accept="audio/*,video/*,.flac,.mkv,.avi,.mov,.aac,.opus,.m4a,.wma" onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
+          <input ref={fileInput} hidden type="file" multiple accept="audio/*,video/*,.flac,.mkv,.avi,.mov,.aac,.opus,.m4a,.wma,.cbz,.cbr,.pdf,application/pdf" onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
           <input ref={folderInput} hidden type="file" multiple onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} {...({ webkitdirectory: "" } as InputHTMLAttributes<HTMLInputElement>)} />
         </div>
       </ProgressContext.Provider>
