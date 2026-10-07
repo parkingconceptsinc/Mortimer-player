@@ -26,7 +26,7 @@ export type RepeatMode = "off" | "all" | "one";
 
 export type Playlist = { id: string; name: string; trackIds: string[]; createdAt: number };
 
-export type Screen = "library" | "videos" | "comics" | "player" | "queue" | "eq" | "settings";
+export type Screen = "library" | "videos" | "books" | "comics" | "player" | "queue" | "eq" | "settings";
 
 export type ComicFormat = "cbz" | "cbr" | "pdf" | "epub";
 
