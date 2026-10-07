@@ -8,13 +8,13 @@ import { compareText, formatSize } from "../util";
 
 const seriesName = (path: string) => (path ? path.slice(path.lastIndexOf("/") + 1) : "Other");
 
-export function Comics() {
+export function Comics({ shelfOverride }: { shelfOverride?: Shelf }) {
   const { comics: everything, comicProgress, actions } = usePlayer();
   const [preferredShelf, setShelf] = usePref<Shelf>("readShelf", "books");
   const counts = { books: everything.filter((c) => c.shelf === "books").length, comics: everything.filter((c) => c.shelf === "comics").length };
   const other: Shelf = preferredShelf === "books" ? "comics" : "books";
   // Land on the shelf that has something in it rather than an empty one.
-  const shelf: Shelf = counts[preferredShelf] || !counts[other] ? preferredShelf : other;
+  const shelf: Shelf = shelfOverride ?? (counts[preferredShelf] || !counts[other] ? preferredShelf : other);
   const comics = useMemo(() => everything.filter((c) => c.shelf === shelf), [everything, shelf]);
   const noun = shelf === "books" ? "book" : "comic";
   const [sort, setSort] = usePref<ComicSort>("comicSort", "recent");
