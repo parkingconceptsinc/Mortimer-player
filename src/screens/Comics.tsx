@@ -52,15 +52,6 @@ export function Comics({ shelfOverride }: { shelfOverride?: Shelf }) {
         <button className="iconBtn" aria-label="Add files" title="Add files" onClick={actions.importFiles}><FilePlus size={20} /></button>
       </ScreenHeader>
 
-      <div className="segmented" role="tablist" aria-label="Shelf">
-        <button role="tab" aria-selected={shelf === "books"} className={shelf === "books" ? "on" : ""} onClick={() => { setShelf("books"); setSeries(null); }}>
-          <BookText size={16} /> Books <em>{counts.books}</em>
-        </button>
-        <button role="tab" aria-selected={shelf === "comics"} className={shelf === "comics" ? "on" : ""} onClick={() => { setShelf("comics"); setSeries(null); }}>
-          <BookOpen size={16} /> Comics <em>{counts.comics}</em>
-        </button>
-      </div>
-
       {!comics.length && shelf === "books" ? (
         <div className="emptyState welcome">
           <div className="heroDisc"><BookText /></div>
