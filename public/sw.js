@@ -1,4 +1,4 @@
-const CACHE = "six-shell-v5";
+const CACHE = "six-shell-v6";
 const SHELL = [
   "/Mortimer-player/",
   "/Mortimer-player/manifest.webmanifest",
@@ -28,7 +28,7 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith(
     fetch(request).then((response) => {
-      if (new URL(request.url).origin === self.location.origin) {
+      if (response.ok && response.type === "basic" && new URL(request.url).origin === self.location.origin) {
         const copy = response.clone();
         void caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
       }

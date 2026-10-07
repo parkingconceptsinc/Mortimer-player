@@ -3,7 +3,7 @@ import { BookOpen, Clapperboard, Disc3, Download, FilePlus, FolderOpen, Library 
 import { applyAudio, attachElement, EQ_PRESETS, initEngine, resumeEngine } from "./audioEngine";
 import { PlayerContext, ProgressContext, type Actions, type MenuTarget, type PlayerState, type SleepState } from "./context";
 import { clearLibrary as clearStoredLibrary, deleteComics, deleteTracks, loadComics, loadLibrary, patchComic, patchTrack, saveComics, saveLibrary, type StoredComic, type StoredLibraryItem } from "./library";
-import { comicFormatOf, isComicFile, makeThumbnail, openComic, toComic } from "./comics";
+import { comicFormatOf, defaultShelf, isComicFile, makeThumbnail, openComic, toComic } from "./comics";
 import { META_VERSION, readItem, readTags, type Incoming } from "./metadata";
 import { readPref, usePref, writePref } from "./prefs";
 import type { Comic, ComicProgress, EqSettings, Playlist, ReaderSettings, RepeatMode, Route, Screen, SongSort, Track, VideoFit } from "./types";
@@ -18,11 +18,13 @@ import { Settings } from "./screens/Settings";
 import { Videos } from "./screens/Videos";
 import { Comics } from "./screens/Comics";
 import { ComicReader } from "./screens/ComicReader";
+import { EpubReader } from "./screens/EpubReader";
+import { readEpubInfo } from "./epub";
 
 const NAV: Array<[Screen, string, string, LucideIcon, boolean]> = [
   ["library", "Library", "Music", LibraryIcon, true],
   ["videos", "Videos", "Videos", Clapperboard, true],
-  ["comics", "Comics", "Comics", BookOpen, true],
+  ["comics", "Books & Comics", "Read", BookOpen, true],
   ["player", "Now Playing", "Playing", Disc3, true],
   ["queue", "Queue", "Queue", ListMusic, false],
   ["eq", "Equalizer", "EQ", SlidersHorizontal, false],
@@ -241,7 +243,7 @@ export function Player() {
 
     if (freshComics.length) {
       const items: StoredComic[] = freshComics.map(({ file, path }, i) => ({
-        id: crypto.randomUUID(), name: file.name, path, size: file.size, lastModified: file.lastModified, addedAt: addedAt + i, format: comicFormatOf(file.name), file,
+        id: crypto.randomUUID(), name: file.name, path, size: file.size, lastModified: file.lastModified, addedAt: addedAt + i, format: comicFormatOf(file.name), shelf: defaultShelf(comicFormatOf(file.name)), file,
       }));
       try { await saveComics(items); } catch { storageOk = false; }
       setComics((old) => [...old, ...items.map(toComic)]);
@@ -267,7 +269,10 @@ export function Player() {
     setImporting(null);
     const parts = [
       fresh.length ? `${fresh.length} song${fresh.length === 1 ? "" : "s"}/video${fresh.length === 1 ? "" : "s"}` : "",
-      freshComics.length ? `${freshComics.length} comic${freshComics.length === 1 ? "" : "s"}` : "",
+      ...(["books", "comics"] as const).map((shelf) => {
+        const n = freshComics.filter((e) => defaultShelf(comicFormatOf(e.file.name)) === shelf).length;
+        return n ? `${n} ${shelf === "books" ? "book" : "comic"}${n === 1 ? "" : "s"}` : "";
+      }),
     ].filter(Boolean).join(" and ");
     const what = `${parts} added${label ? ` from “${label}”` : ""}`;
     toast(storageOk ? what : `${what}, but they couldn't be saved for next time`);
@@ -572,6 +577,11 @@ export function Player() {
       });
     },
     setReaderSettings,
+    setComicShelf(id, shelf) {
+      setComics((old) => old.map((c) => (c.id === id ? { ...c, shelf } : c)));
+      void patchComic(id, { shelf }).catch(() => {});
+      toast(shelf === "books" ? "Moved to Books" : "Moved to Comics");
+    },
     removeComics(ids) {
       const gone = new Set(ids);
       setComics((old) => {
@@ -829,24 +839,31 @@ export function Player() {
 
   useEffect(() => {
     if (screen !== "comics" || reader || comicBusy.current) return;
-    const next = comics.find((c) => (!c.cover || !c.pages) && !comicCoverAttempted.has(c.id));
+    const next = comics.find((c) => (!c.cover || (!c.pages && c.format !== "epub")) && !comicCoverAttempted.has(c.id));
     if (!next) return;
     comicCoverAttempted.add(next.id);
     comicBusy.current = true;
     void (async () => {
       let pages: number | undefined;
       let image: Blob | null = null;
+      let info: { title?: string; author?: string } = {};
       try {
-        const source = await openComic(next.file, undefined, { firstPageOnly: true });
-        pages = source.pages;
-        if (!next.cover) image = await makeThumbnail(await source.getPage(0), 360);
-        source.close();
+        if (next.format === "epub") {
+          const epub = await readEpubInfo(next.file);
+          info = { title: epub.title, author: epub.author };
+          if (epub.cover) image = await makeThumbnail(epub.cover, 360);
+        } else {
+          const source = await openComic(next.file, undefined, { firstPageOnly: true });
+          pages = source.pages;
+          if (!next.cover) image = await makeThumbnail(await source.getPage(0), 360);
+          source.close();
+        }
       } catch {}
       comicBusy.current = false;
-      if (pages || image) {
+      if (pages || image || info.title || info.author) {
         const cover = image ? URL.createObjectURL(image) : undefined;
-        setComics((old) => old.map((c) => (c.id === next.id ? { ...c, cover: cover ?? c.cover, pages: pages ?? c.pages } : c)));
-        void patchComic(next.id, { ...(image ? { cover: image } : {}), ...(pages ? { pages } : {}) }).catch(() => {});
+        setComics((old) => old.map((c) => (c.id === next.id ? { ...c, cover: cover ?? c.cover, pages: pages ?? c.pages, title: info.title ?? c.title, author: info.author ?? c.author } : c)));
+        void patchComic(next.id, Object.fromEntries(Object.entries({ cover: image ?? undefined, pages, title: info.title, author: info.author }).filter(([, v]) => v !== undefined))).catch(() => {});
       }
       setThumbTick((n) => n + 1);
     })();
@@ -980,6 +997,8 @@ export function Player() {
       const target = event.target as HTMLElement | null;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (target?.closest("input, textarea, select, [contenteditable]")) return;
+      // Space/Enter on a focused control must activate that control, not toggle playback.
+      if ((event.key === " " || event.key === "Enter") && target?.closest("button, a, summary, [role=button], [role=switch]")) return;
       const skip = readPref("skipSeconds", 10);
       const handled: Record<string, () => void> = {
         " ": () => actions.togglePlay(),
@@ -1071,7 +1090,7 @@ export function Player() {
             ))}
           </nav>
 
-          {reader && <ComicReader key={reader.id} />}
+          {reader && (comics.find((c) => c.id === reader.id)?.format === "epub" ? <EpubReader key={reader.id} /> : <ComicReader key={reader.id} />)}
           {menu && <TrackMenu target={menu} onClose={() => actions.back()} />}
           {importing && (
             <div className="importBar" role="status">
@@ -1082,7 +1101,7 @@ export function Player() {
           {toastMessage && <div className="toast" role="status">{toastMessage}</div>}
 
           <audio ref={audioRef} preload="auto" />
-          <input ref={fileInput} hidden type="file" multiple accept="audio/*,video/*,.flac,.mkv,.avi,.mov,.aac,.opus,.m4a,.wma,.cbz,.cbr,.pdf,application/pdf" onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
+          <input ref={fileInput} hidden type="file" multiple accept="audio/*,video/*,.flac,.mkv,.avi,.mov,.aac,.opus,.m4a,.wma,.cbz,.cbr,.pdf,.epub,application/pdf,application/epub+zip" onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
           <input ref={folderInput} hidden type="file" multiple onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} {...({ webkitdirectory: "" } as InputHTMLAttributes<HTMLInputElement>)} />
         </div>
       </ProgressContext.Provider>

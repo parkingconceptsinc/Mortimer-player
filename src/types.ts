@@ -28,7 +28,9 @@ export type Playlist = { id: string; name: string; trackIds: string[]; createdAt
 
 export type Screen = "library" | "videos" | "comics" | "player" | "queue" | "eq" | "settings";
 
-export type ComicFormat = "cbz" | "cbr" | "pdf";
+export type ComicFormat = "cbz" | "cbr" | "pdf" | "epub";
+
+export type Shelf = "books" | "comics";
 
 export type Comic = {
   id: string;
@@ -40,12 +42,14 @@ export type Comic = {
   lastModified: number;
   addedAt: number;
   format: ComicFormat;
+  shelf: Shelf;
+  author?: string;
   pages?: number;
   file: Blob;
   cover?: string;
 };
 
-export type ComicProgress = { page: number; pages: number; at: number };
+export type ComicProgress = { page: number; pages: number; at: number; cfi?: string };
 
 export type ReaderSettings = {
   mode: "paged" | "double" | "vertical";

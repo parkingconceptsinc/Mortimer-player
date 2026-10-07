@@ -79,9 +79,9 @@ export function Videos() {
                 const pct = v.duration && watched ? Math.min(100, (watched / v.duration) * 100) : 0;
                 const isCurrent = current?.id === v.id;
                 return (
-                  <div key={v.id} className={"videoCard" + (isCurrent ? " active" : "")} onClick={() => play(v)}
+                  <div key={v.id} className={"videoCard" + (isCurrent ? " active" : "")}
                     onContextMenu={(e) => { e.preventDefault(); actions.openMenu({ title: v.title, subtitle: v.folder, ids: [v.id], track: v }); }}>
-                    <div className="videoThumb">
+                    <div className="videoThumb" onClick={() => play(v)}>
                       <Art src={v.cover} seed={v.title} icon={Film} />
                       {v.duration ? <span className="videoDur">{formatTime(v.duration)}</span> : null}
                       {isCurrent && <span className="videoNow"><NowBars paused={!playing} /></span>}
@@ -89,11 +89,11 @@ export function Videos() {
                       <span className="videoPlayIcon"><Play size={22} fill="currentColor" /></span>
                     </div>
                     <div className="videoMeta">
-                      <div>
+                      <button className="cardTitle" onClick={() => play(v)} aria-current={isCurrent ? "true" : undefined}>
                         <b>{v.title}</b>
                         <small>{[pct >= 97 ? "Watched" : pct > 0 ? `${Math.round(pct)}% watched` : null, v.name.split(".").pop()?.toUpperCase(), formatSize(v.size)].filter(Boolean).join(" · ")}</small>
-                      </div>
-                      <button className="iconBtn" aria-label="More options" onClick={(e) => { e.stopPropagation(); actions.openMenu({ title: v.title, subtitle: v.folder, ids: [v.id], track: v }); }}>
+                      </button>
+                      <button className="iconBtn" aria-label={`More options for ${v.title}`} onClick={() => actions.openMenu({ title: v.title, subtitle: v.folder, ids: [v.id], track: v })}>
                         <EllipsisVertical size={18} />
                       </button>
                     </div>
