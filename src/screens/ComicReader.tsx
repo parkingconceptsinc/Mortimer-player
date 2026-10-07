@@ -528,21 +528,21 @@ export function ComicReader() {
       )}
 
       <div className={"rdChrome" + (ui && !showEnd ? "" : " hidden")}>
-        <header className="rdTop">
+        <div className="rdTop" role="toolbar" aria-label="Reader controls">
           <button className="iconBtn" aria-label="Close comic" onClick={() => actions.closeComic()}><ChevronLeft size={26} /></button>
           <div className="rdTitle"><b>{comic.title}</b><small>{pageLabel}</small></div>
           <button className="iconBtn" aria-label="All pages" title="All pages" disabled={!source} onClick={() => setSheet("pages")}><LayoutGrid size={21} /></button>
           <button className="iconBtn" aria-label="Reading settings" title="Reading settings" onClick={() => setSheet("settings")}><Settings2 size={21} /></button>
           <button className="iconBtn" aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"} onClick={toggleFullscreen}>{fullscreen ? <Minimize size={21} /> : <Maximize size={21} />}</button>
-        </header>
+        </div>
         {pages > 0 && (
-          <footer className="rdBottom">
+          <div className="rdBottom" role="toolbar" aria-label="Page navigation">
             <button className="iconBtn" aria-label={s.direction === "rtl" ? "Next page" : "Previous page"} onClick={() => (vertical ? logical(-1) : visual(-1))}><ChevronLeft size={24} /></button>
             <input type="range" className="range" min={0} max={Math.max(0, pages - 1)} step={1} value={page} aria-label="Page"
               style={{ "--pct": `${pages > 1 ? (page / (pages - 1)) * 100 : 100}%`, direction: s.direction === "rtl" && !vertical ? "rtl" : "ltr" } as CSSProperties}
               onChange={(e) => jumpTo(Number(e.target.value))} />
             <button className="iconBtn" aria-label={s.direction === "rtl" ? "Previous page" : "Next page"} onClick={() => (vertical ? logical(1) : visual(1))}><ChevronRight size={24} /></button>
-          </footer>
+          </div>
         )}
       </div>
 

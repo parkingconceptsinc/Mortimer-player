@@ -1,5 +1,5 @@
 import { createContext, useContext, type RefObject } from "react";
-import type { Comic, ComicProgress, EqSettings, Playlist, ReaderSettings, RepeatMode, Route, Screen, SongSort, Track, VideoFit } from "./types";
+import type { Comic, ComicProgress, EqSettings, Playlist, ReaderSettings, RepeatMode, Route, Screen, Shelf, SongSort, Track, VideoFit } from "./types";
 
 export type MenuTarget = {
   title: string;
@@ -64,6 +64,7 @@ export type Actions = {
   setComicProgress(id: string, progress: ComicProgress | null): void;
   setReaderSettings(update: (settings: ReaderSettings) => ReaderSettings): void;
   removeComics(ids: string[]): void;
+  setComicShelf(id: string, shelf: Shelf): void;
   openMenu(target: MenuTarget): void;
   goTo(screen: Screen): void;
   navigate(route: Route): void;

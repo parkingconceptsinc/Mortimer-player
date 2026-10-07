@@ -1,16 +1,20 @@
-import type { Comic, ComicFormat } from "./types";
+import type { Comic, ComicFormat, Shelf } from "./types";
 import type { StoredComic } from "./library";
 import { folderOf, stripExt } from "./util";
 
-export const isComicFile = (name: string) => /\.(cbz|cbr|pdf)$/i.test(name);
-export const comicFormatOf = (name: string): ComicFormat => (/\.cbr$/i.test(name) ? "cbr" : /\.pdf$/i.test(name) ? "pdf" : "cbz");
+export const isComicFile = (name: string) => /\.(cbz|cbr|pdf|epub)$/i.test(name);
+export const comicFormatOf = (name: string): ComicFormat => (/\.cbr$/i.test(name) ? "cbr" : /\.pdf$/i.test(name) ? "pdf" : /\.epub$/i.test(name) ? "epub" : "cbz");
+export const defaultShelf = (format: ComicFormat): Shelf => (format === "cbz" || format === "cbr" ? "comics" : "books");
 export const comicTitle = (name: string) => stripExt(name).replace(/_+/g, " ").replace(/\s+/g, " ").trim();
 
 export function toComic(x: StoredComic): Comic {
   return {
     id: x.id,
     name: x.name,
-    title: comicTitle(x.name),
+    title: x.title || comicTitle(x.name),
+    author: x.author,
+    // Items saved before shelves existed were all on the comics shelf; keep them there.
+    shelf: x.shelf ?? (x.format === "epub" ? "books" : "comics"),
     path: x.path,
     folder: folderOf(x.path),
     size: x.size,

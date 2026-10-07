@@ -26,10 +26,15 @@ export type StoredComic = {
   size: number;
   lastModified: number;
   addedAt: number;
-  format: "cbz" | "cbr" | "pdf";
+  format: "cbz" | "cbr" | "pdf" | "epub";
+  shelf?: "books" | "comics";
+  title?: string;
+  author?: string;
   pages?: number;
   file: Blob;
   cover?: Blob;
+  // Serialized epub.js locations, so percentages don't need recomputing on every open.
+  locations?: string;
 };
 
 const DB_NAME = "mortimer-player";
@@ -131,4 +136,9 @@ export async function patchComic(id: string, patch: Partial<Omit<StoredComic, "i
   } finally {
     db.close();
   }
+}
+
+export async function loadComicLocations(id: string): Promise<string | undefined> {
+  const item = await withStore<StoredComic | undefined>("readonly", (store) => store.get(id), COMICS);
+  return item?.locations;
 }
