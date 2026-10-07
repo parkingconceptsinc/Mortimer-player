@@ -91,12 +91,12 @@ export function Settings() {
       </Card>
 
       <Card title="App">
-        {p.canInstall && <button className="btn primary wide" onClick={actions.install}><Download size={17} /> Install 6</button>}
+        {p.canInstall && <button className="btn primary wide" onClick={actions.install}><Download size={17} /> Install app</button>}
         <details className="shortcuts">
           <summary><Keyboard size={17} /> Keyboard shortcuts</summary>
           <dl>{SHORTCUTS.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
         </details>
-        <p className="hint">6 · everything stays on this device. Swipe the album art to change tracks; double-tap the left or right of a video to skip.</p>
+        <p className="hint">Everything stays on this device. Swipe the album art to change tracks; double-tap the left or right of a video to skip.</p>
       </Card>
     </section>
   );

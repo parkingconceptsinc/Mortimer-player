@@ -4,7 +4,7 @@ import { applyAudio, attachElement, EQ_PRESETS, initEngine, resumeEngine } from 
 import { PlayerContext, ProgressContext, type Actions, type MenuTarget, type PlayerState, type SleepState } from "./context";
 import { clearLibrary as clearStoredLibrary, deleteComics, deleteTracks, loadComics, loadLibrary, patchComic, patchTrack, saveComics, saveLibrary, type StoredComic, type StoredLibraryItem } from "./library";
 import { comicFormatOf, isComicFile, makeThumbnail, openComic, toComic } from "./comics";
-import { readItem, type Incoming } from "./metadata";
+import { META_VERSION, readItem, readTags, type Incoming } from "./metadata";
 import { readPref, usePref, writePref } from "./prefs";
 import type { Comic, ComicProgress, EqSettings, Playlist, ReaderSettings, RepeatMode, Route, Screen, SongSort, Track, VideoFit } from "./types";
 import { ACCENTS, compareText, formatTime, shuffled, srtToVtt, supported, toTrack, trackKey } from "./util";
@@ -55,6 +55,7 @@ export function Player() {
   const toastTimer = useRef<number | undefined>(undefined);
   const thumbBusy = useRef(false);
   const comicBusy = useRef(false);
+  const rescanStarted = useRef(false);
   const returnScreen = useRef<Screen>("library");
   const loadedTrack = useRef<{ id: string; kind: Track["kind"] } | null>(null);
 
@@ -99,7 +100,7 @@ export function Player() {
   const [now, setNow] = useState(() => Date.now());
   const [ab, setAb] = useState<{ a: number | null; b: number | null }>({ a: null, b: null });
   const [subtitles, setSubtitles] = useState<{ url: string; name: string } | null>(null);
-  const [importing, setImporting] = useState<{ done: number; total: number } | null>(null);
+  const [importing, setImporting] = useState<{ done: number; total: number; label?: string } | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuTarget | null>(null);
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
@@ -836,7 +837,7 @@ export function Player() {
       let pages: number | undefined;
       let image: Blob | null = null;
       try {
-        const source = await openComic(next.file);
+        const source = await openComic(next.file, undefined, { firstPageOnly: true });
         pages = source.pages;
         if (!next.cover) image = await makeThumbnail(await source.getPage(0), 360);
         source.close();
@@ -850,6 +851,42 @@ export function Player() {
       setThumbTick((n) => n + 1);
     })();
   }, [comics, screen, reader, thumbTick]);
+
+  useEffect(() => {
+    if (!loaded || rescanStarted.current) return;
+    const stale = tracks.filter((t) => t.kind === "audio" && t.metaVersion < META_VERSION);
+    if (!stale.length) return;
+    rescanStarted.current = true;
+    void (async () => {
+      let improved = 0;
+      for (let i = 0; i < stale.length; i++) {
+        const track = stale[i];
+        setImporting({ done: i, total: stale.length, label: "Reading tags and covers" });
+        try {
+          const tags = await readTags(await (await fetch(track.url)).blob(), track.name);
+          const patch = Object.fromEntries(Object.entries({ ...tags, metaVersion: META_VERSION }).filter(([, v]) => v !== undefined));
+          await patchTrack(track.id, patch).catch(() => {});
+          const cover = tags.cover ? URL.createObjectURL(tags.cover) : undefined;
+          setTracks((old) => old.map((t) => (t.id !== track.id ? t : {
+            ...t,
+            title: tags.title || t.title,
+            artist: tags.artist ?? t.artist,
+            album: tags.album ?? t.album,
+            albumArtist: tags.albumArtist ?? t.albumArtist,
+            genre: tags.genre ?? t.genre,
+            year: tags.year ?? t.year,
+            trackNo: tags.trackNo ?? t.trackNo,
+            duration: tags.duration ?? t.duration,
+            cover: cover ?? t.cover,
+            metaVersion: META_VERSION,
+          })));
+          if (tags.artist || tags.album || tags.cover) improved++;
+        } catch {}
+      }
+      setImporting(null);
+      if (improved) toast(`Updated tags and covers for ${improved} song${improved === 1 ? "" : "s"}`);
+    })();
+  }, [loaded, tracks]);
 
   useEffect(() => {
     if (!sleep.endsAt) return;
@@ -872,7 +909,7 @@ export function Player() {
     navigator.mediaSession.metadata = current
       ? new MediaMetadata({
           title: current.title,
-          artist: current.artist || "6",
+          artist: current.artist || current.album,
           album: current.album,
           artwork: current.cover ? [{ src: current.cover, sizes: "512x512" }] : [{ src: "/Mortimer-player/icon-512.png", sizes: "512x512", type: "image/png" }],
         })
@@ -919,7 +956,7 @@ export function Player() {
     };
     const onInstalled = () => {
       setInstallEvent(null);
-      toast("6 installed");
+      toast("App installed");
     };
     const onPop = () => {
       if (pushedHistory.current > 0) pushedHistory.current--;
@@ -996,8 +1033,7 @@ export function Player() {
         <div className={`shell screen-${screen}${current ? " hasCurrent" : ""}${screen === "player" && current?.kind === "video" ? " immersive" : ""}`} style={{ "--accent": accentColor } as CSSProperties}>
           <aside className="sidebar">
             <div className="brand">
-              <img className="logo" src={`${import.meta.env.BASE_URL}logo.png`} alt="" />
-              <b>6</b>
+              <img className="logo" src={`${import.meta.env.BASE_URL}logo.png`} alt="Home" />
             </div>
             <nav>
               {NAV.map(([id, label, , Icon]) => (
@@ -1039,7 +1075,7 @@ export function Player() {
           {menu && <TrackMenu target={menu} onClose={() => actions.back()} />}
           {importing && (
             <div className="importBar" role="status">
-              <span>{importing.total ? `Importing ${importing.done} of ${importing.total}…` : "Scanning folder…"}</span>
+              <span>{importing.total ? `${importing.label ?? "Importing"} ${importing.done} of ${importing.total}…` : "Scanning folder…"}</span>
               <i style={{ width: importing.total ? `${(importing.done / importing.total) * 100}%` : "15%" }} />
             </div>
           )}

@@ -84,6 +84,7 @@ export function toTrack(x: StoredLibraryItem): Track {
     path: x.path,
     folder: folderOf(x.path),
     addedAt: x.addedAt ?? x.lastModified,
+    metaVersion: x.metaVersion ?? 0,
     url: URL.createObjectURL(x.file),
     cover: x.cover ? URL.createObjectURL(x.cover) : undefined,
   };

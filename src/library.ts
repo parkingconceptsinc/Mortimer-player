@@ -15,6 +15,7 @@ export type StoredLibraryItem = {
   trackNo?: number;
   duration?: number;
   addedAt?: number;
+  metaVersion?: number;
   cover?: Blob;
 };
 

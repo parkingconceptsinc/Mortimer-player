@@ -17,6 +17,7 @@ export type Track = {
   path: string;
   folder: string;
   addedAt: number;
+  metaVersion: number;
   url: string;
   cover?: string;
 };

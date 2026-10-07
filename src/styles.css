@@ -547,7 +547,7 @@ video::cue { font-size: var(--cue, 100%); background: #000b; }
 
 /* ---------- Desktop ---------- */
 .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; }
-.logo { width: 42px; height: 42px; border-radius: 12px; background: #000; box-shadow: 0 0 0 1px #ffffff14, 0 8px 22px #000a; }
+.logo { width: 64px; height: 64px; border-radius: 18px; background: #000; box-shadow: 0 0 0 1px #ffffff14, 0 8px 22px #000a; }
 .brand b { display: block; font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
 
 @media (min-width: 900px) {
