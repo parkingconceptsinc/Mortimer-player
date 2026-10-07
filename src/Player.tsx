@@ -980,6 +980,8 @@ export function Player() {
       const target = event.target as HTMLElement | null;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (target?.closest("input, textarea, select, [contenteditable]")) return;
+      // Space/Enter on a focused control must activate that control, not toggle playback.
+      if ((event.key === " " || event.key === "Enter") && target?.closest("button, a, summary, [role=button], [role=switch]")) return;
       const skip = readPref("skipSeconds", 10);
       const handled: Record<string, () => void> = {
         " ": () => actions.togglePlay(),

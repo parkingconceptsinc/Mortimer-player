@@ -132,19 +132,19 @@ export function Comics() {
 
 function ComicCard({ comic, status, onOpen, onMenu }: { comic: Comic; status: { pct: number; label: string }; onOpen: () => void; onMenu: () => void }) {
   return (
-    <div className="comicCard" onClick={onOpen} onContextMenu={(e) => { e.preventDefault(); onMenu(); }}>
-      <div className="comicCover">
+    <div className="comicCard" onContextMenu={(e) => { e.preventDefault(); onMenu(); }}>
+      <div className="comicCover" onClick={onOpen}>
         <Art src={comic.cover} seed={comic.title} icon={BookOpen} />
         {status.pct >= 100 && <span className="comicBadge"><BookOpenCheck size={14} /></span>}
         {status.pct > 0 && status.pct < 100 && <i className="comicProgress" style={{ width: `${status.pct}%` }} />}
         <span className="comicFormat">{comic.format.toUpperCase()}</span>
       </div>
       <div className="comicMeta">
-        <div>
+        <button className="cardTitle" onClick={onOpen}>
           <b>{comic.title}</b>
           <small>{status.label}</small>
-        </div>
-        <button className="iconBtn" aria-label="More options" onClick={(e) => { e.stopPropagation(); onMenu(); }}><EllipsisVertical size={18} /></button>
+        </button>
+        <button className="iconBtn" aria-label={`More options for ${comic.title}`} onClick={onMenu}><EllipsisVertical size={18} /></button>
       </div>
     </div>
   );

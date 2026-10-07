@@ -27,7 +27,7 @@ export function Art({ src, seed, icon: Icon = Music2, className = "", round = fa
 }
 
 export function NowBars({ paused }: { paused: boolean }) {
-  return <span className={"nowBars" + (paused ? " paused" : "")} aria-label="Now playing"><i /><i /><i /></span>;
+  return <span className={"nowBars" + (paused ? " paused" : "")} role="img" aria-label={paused ? "Paused" : "Now playing"}><i /><i /><i /></span>;
 }
 
 type RowProps = {
@@ -45,7 +45,8 @@ type RowProps = {
 
 export const TrackRow = memo(function TrackRow({ track, index, active, playing, favorite, number, detail, onPlay, onMenu, trailing }: RowProps) {
   return (
-    <div className={"trackRow" + (active ? " active" : "")} onClick={() => onPlay(track, index)} onContextMenu={(e) => { e.preventDefault(); onMenu(track, index); }}>
+    <div className={"trackRow" + (active ? " active" : "")} onContextMenu={(e) => { e.preventDefault(); onMenu(track, index); }}>
+      <button className="rowMain" onClick={() => onPlay(track, index)} aria-current={active ? "true" : undefined}>
       {number != null ? (
         <span className="trackNo">{active ? <NowBars paused={!playing} /> : number}</span>
       ) : (
@@ -61,9 +62,10 @@ export const TrackRow = memo(function TrackRow({ track, index, active, playing, 
           {detail ?? ([track.artist, track.album].filter(Boolean).join(" · ") || (track.kind === "video" ? `Video · ${track.name.split(".").pop()?.toUpperCase()}` : track.folder || "Unknown artist"))}
         </small>
       </div>
-      {trailing}
       <span className="trackDur">{track.duration ? formatTime(track.duration) : ""}</span>
-      <button className="iconBtn" aria-label="More options" onClick={(e) => { e.stopPropagation(); onMenu(track, index); }}><EllipsisVertical size={18} /></button>
+      </button>
+      {trailing}
+      <button className="iconBtn" aria-label={`More options for ${track.title}`} onClick={() => onMenu(track, index)}><EllipsisVertical size={18} /></button>
     </div>
   );
 });
@@ -158,18 +160,20 @@ export function MiniPlayer() {
   const { currentTime, duration } = useProgress();
   if (!current) return null;
   return (
-    <div className="miniPlayer" onClick={() => actions.goTo("player")}>
+    <aside className="miniPlayer" aria-label="Now playing">
       <i className="miniProgress" style={{ width: duration ? `${(currentTime / duration) * 100}%` : "0%" }} />
-      <Art src={current.cover} seed={current.album || current.title} icon={current.kind === "video" ? Film : Music2} className="miniArt" />
-      <div className="miniText">
-        <b>{current.title}</b>
-        <small>{current.artist || current.album || (current.kind === "video" ? "Video" : "Unknown artist")}</small>
-      </div>
-      <button className="iconBtn big" aria-label={playing ? "Pause" : "Play"} onClick={(e) => { e.stopPropagation(); actions.togglePlay(); }}>
+      <button className="rowMain miniMain" onClick={() => actions.goTo("player")} aria-label={`Open player: ${current.title}`}>
+        <Art src={current.cover} seed={current.album || current.title} icon={current.kind === "video" ? Film : Music2} className="miniArt" />
+        <div className="miniText">
+          <b>{current.title}</b>
+          <small>{current.artist || current.album || (current.kind === "video" ? "Video" : "Unknown artist")}</small>
+        </div>
+      </button>
+      <button className="iconBtn big" aria-label={playing ? "Pause" : "Play"} onClick={actions.togglePlay}>
         {playing ? <Pause fill="currentColor" /> : <Play fill="currentColor" />}
       </button>
-      <button className="iconBtn" aria-label="Next" onClick={(e) => { e.stopPropagation(); actions.next(); }}><SkipForward fill="currentColor" /></button>
-    </div>
+      <button className="iconBtn" aria-label="Next" onClick={actions.next}><SkipForward fill="currentColor" /></button>
+    </aside>
   );
 }
 

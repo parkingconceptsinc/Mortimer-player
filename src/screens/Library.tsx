@@ -423,11 +423,13 @@ function GroupList({ groups, icon, round, square, label, detail, onOpen }: {
   return (
     <div className="groupList">
       {groups.map((g) => (
-        <div key={g.name} className="groupRow" onClick={() => onOpen(g)}
+        <div key={g.name} className="groupRow"
           onContextMenu={(e) => { e.preventDefault(); actions.openMenu({ title: label?.(g) ?? g.name, subtitle: detail(g), ids: g.tracks.map((t) => t.id), cover: g.cover }); }}>
-          <Art src={square ? undefined : g.cover} seed={g.name} icon={icon} round={round} className="groupArt" />
-          <div className="trackText"><b>{label?.(g) ?? g.name}</b><small>{detail(g)}</small></div>
-          <button className="iconBtn" aria-label="More options" onClick={(e) => { e.stopPropagation(); actions.openMenu({ title: label?.(g) ?? g.name, subtitle: detail(g), ids: g.tracks.map((t) => t.id), cover: g.cover }); }}>
+          <button className="rowMain" onClick={() => onOpen(g)}>
+            <Art src={square ? undefined : g.cover} seed={g.name} icon={icon} round={round} className="groupArt" />
+            <div className="trackText"><b>{label?.(g) ?? g.name}</b><small>{detail(g)}</small></div>
+          </button>
+          <button className="iconBtn" aria-label={`More options for ${label?.(g) ?? g.name}`} onClick={() => actions.openMenu({ title: label?.(g) ?? g.name, subtitle: detail(g), ids: g.tracks.map((t) => t.id), cover: g.cover })}>
             <EllipsisVertical size={18} />
           </button>
         </div>
@@ -440,15 +442,17 @@ function AlbumCard({ album }: { album: AlbumInfo }) {
   const { actions } = usePlayer();
   const menu = () => actions.openMenu({ title: album.title, subtitle: album.artist, ids: album.tracks.map((t) => t.id), cover: album.cover });
   return (
-    <div className="albumCard" onClick={() => actions.navigate({ view: "album", key: album.key })} onContextMenu={(e) => { e.preventDefault(); menu(); }}>
-      <div className="albumCover">
+    <div className="albumCard" onContextMenu={(e) => { e.preventDefault(); menu(); }}>
+      <div className="albumCover" onClick={() => actions.navigate({ view: "album", key: album.key })}>
         <Art src={album.cover} seed={album.title + album.artist} icon={Disc3} />
         <button className="albumPlay" aria-label={`Play ${album.title}`} onClick={(e) => { e.stopPropagation(); actions.playTracks(album.tracks.map((t) => t.id), undefined, { shuffle: false, source: album.title }); }}>
           <Play size={18} fill="currentColor" />
         </button>
       </div>
-      <b>{album.title}</b>
-      <small>{album.artist}{album.year ? ` · ${album.year}` : ""}</small>
+      <button className="cardTitle" onClick={() => actions.navigate({ view: "album", key: album.key })}>
+        <b>{album.title}</b>
+        <small>{album.artist}{album.year ? ` · ${album.year}` : ""}</small>
+      </button>
     </div>
   );
 }
@@ -553,10 +557,12 @@ function PlaylistsView({ q }: { q: string }) {
             const items = p.trackIds.map((id) => trackMap.get(id)).filter((t): t is Track => !!t);
             const cover = items.find((t) => t.cover)?.cover;
             return (
-              <div key={p.id} className="groupRow" onClick={() => actions.navigate({ view: "playlist", id: p.id })}>
-                <Art src={cover} seed={p.name} icon={ListMusic} className="groupArt" />
-                <div className="trackText"><b>{p.name}</b><small>{countLabel(items)}</small></div>
-                <ChevronRight size={18} className="muted" />
+              <div key={p.id} className="groupRow">
+                <button className="rowMain" onClick={() => actions.navigate({ view: "playlist", id: p.id })}>
+                  <Art src={cover} seed={p.name} icon={ListMusic} className="groupArt" />
+                  <div className="trackText"><b>{p.name}</b><small>{countLabel(items)}</small></div>
+                  <ChevronRight size={18} className="muted" />
+                </button>
               </div>
             );
           })}
