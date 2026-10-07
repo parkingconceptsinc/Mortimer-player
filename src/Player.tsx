@@ -239,13 +239,14 @@ export function Player() {
     }
     void navigator.storage?.persist?.().catch(() => false);
     const addedAt = Date.now();
-    let storageOk = true;
+    let libraryStorageOk = true;
+    let comicStorageOk = true;
 
     if (freshComics.length) {
       const items: StoredComic[] = freshComics.map(({ file, path }, i) => ({
         id: crypto.randomUUID(), name: file.name, path, size: file.size, lastModified: file.lastModified, addedAt: addedAt + i, format: comicFormatOf(file.name), shelf: defaultShelf(comicFormatOf(file.name)), file,
       }));
-      try { await saveComics(items); } catch { storageOk = false; }
+      try { await saveComics(items); } catch { comicStorageOk = false; }
       setComics((old) => [...old, ...items.map(toComic)]);
     }
 
@@ -255,8 +256,8 @@ export function Player() {
       const items = batch;
       batch = [];
       if (!items.length) return;
-      if (storageOk) {
-        try { await saveLibrary(items); } catch { storageOk = false; }
+      if (libraryStorageOk) {
+        try { await saveLibrary(items); } catch { libraryStorageOk = false; }
       }
       setTracks((old) => [...old, ...items.map(toTrack)]);
     };
@@ -275,7 +276,7 @@ export function Player() {
       }),
     ].filter(Boolean).join(" and ");
     const what = `${parts} added${label ? ` from “${label}”` : ""}`;
-    toast(storageOk ? what : `${what}, but they couldn't be saved for next time`);
+    toast(libraryStorageOk && comicStorageOk ? what : `${what}, but some items couldn't be saved for next time`);
   }
 
   async function importFolder() {
@@ -507,6 +508,11 @@ export function Player() {
         }
         return [];
       });
+      setComics((old) => {
+        for (const c of old) if (c.cover) URL.revokeObjectURL(c.cover);
+        return [];
+      });
+      void deleteComics(comics.map((c) => c.id)).catch(() => toast("Couldn't clear local books and comics"));
       setPlaylists((p) => p.map((pl) => ({ ...pl, trackIds: [] })));
       setFavoritesList([]);
       setPlays({});
