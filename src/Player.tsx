@@ -22,7 +22,7 @@ import { EpubReader } from "./screens/EpubReader";
 import { readEpubInfo } from "./epub";
 
 const NAV: Array<[Screen, string, string, LucideIcon, boolean]> = [
-  ["library", "Library", "Music", LibraryIcon, true],
+  ["library", "Music", "Music", LibraryIcon, true],
   ["videos", "Videos", "Videos", Clapperboard, true],
   ["comics", "Books & Comics", "Read", BookOpen, true],
   ["player", "Now Playing", "Playing", Disc3, true],
@@ -727,7 +727,7 @@ export function Player() {
 
   useEffect(() => {
     let cancelled = false;
-    loadLibrary().then((stored) => {
+    const restoreMusic = loadLibrary().then((stored) => {
       if (cancelled) return;
       const restored = stored.map(toTrack).sort((a, b) => a.addedAt - b.addedAt);
       const ids = new Set(restored.map((t) => t.id));
@@ -739,14 +739,18 @@ export function Player() {
       const resume = readPref<{ id: string; time: number } | null>("resume", null);
       if (readPref("resumePosition", true) && resume && resume.id === kept[index]) pendingSeek.current = resume.time;
       setTracks(restored);
-      void loadComics().then((stored) => { if (!cancelled) setComics(stored.map(toComic).sort((a, b) => a.addedAt - b.addedAt)); }).catch(() => {});
       setQueue(kept);
       setQIndex(index);
-      setLoaded(true);
     }).catch(() => {
-      if (cancelled) return;
-      setLoaded(true);
-      toast("Local library storage is unavailable in this browser");
+      if (!cancelled) toast("Local music storage is unavailable in this browser");
+    });
+    const restoreBooks = loadComics().then((stored) => {
+      if (!cancelled) setComics(stored.map(toComic).sort((a, b) => a.addedAt - b.addedAt));
+    }).catch(() => {
+      if (!cancelled) toast("Local books and comics storage is unavailable in this browser");
+    });
+    Promise.allSettled([restoreMusic, restoreBooks]).finally(() => {
+      if (!cancelled) setLoaded(true);
     });
     return () => { cancelled = true; };
   }, []);
