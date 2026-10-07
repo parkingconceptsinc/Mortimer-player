@@ -9,8 +9,16 @@ const SHELL = [
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
-  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE).then(async (cache) => {
+      await Promise.all(SHELL.map(async (url) => {
+        try {
+          const response = await fetch(url);
+          if (response.ok) await cache.put(url, response);
+        } catch {}
+      }));
+    }).then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener("activate", (event) => {
