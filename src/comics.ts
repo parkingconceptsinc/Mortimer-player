@@ -35,11 +35,11 @@ const mimeOf = (name: string) => MIME[name.split(".").pop()!.toLowerCase()] ?? "
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 const isPage = (name: string) => IMAGE.test(name) && !name.includes("__MACOSX") && !name.split("/").pop()!.startsWith(".");
 
-export async function openComic(file: Blob, onProgress?: (fraction: number) => void): Promise<ComicSource> {
+export async function openComic(file: Blob, onProgress?: (fraction: number) => void, options?: { firstPageOnly?: boolean }): Promise<ComicSource> {
   const head = new Uint8Array(await file.slice(0, 6).arrayBuffer());
   const magic = String.fromCharCode(...head);
   if (magic.startsWith("PK")) return openZip(file);
-  if (magic.startsWith("Rar!")) return openRar(file, onProgress);
+  if (magic.startsWith("Rar!")) return openRar(file, onProgress, options?.firstPageOnly);
   if (magic.startsWith("%PDF")) return openPdf(file);
   if (head[0] === 0x37 && head[1] === 0x7a && head[2] === 0xbc) throw new Error("7-Zip comics (CB7) aren't supported yet — convert them to CBZ.");
   throw new Error("This file isn't a comic archive this app can read, or it's damaged.");
@@ -118,7 +118,10 @@ async function openZip(file: Blob): Promise<ComicSource> {
       const type = mimeOf(entry.name);
       if (entry.method === 0) return new Blob([raw], { type });
       if (entry.method !== 8) throw new Error(`Page ${index + 1} uses a compression method that isn't supported.`);
-      if (typeof DecompressionStream === "undefined") throw new Error("Update your browser to read CBZ comics.");
+      if (typeof DecompressionStream === "undefined") {
+        const { inflateSync } = await import("fflate");
+        return new Blob([inflateSync(new Uint8Array(await raw.arrayBuffer()))], { type });
+      }
       const inflated = await new Response(raw.stream().pipeThrough(new DecompressionStream("deflate-raw"))).blob();
       return new Blob([inflated], { type });
     },
@@ -128,13 +131,13 @@ async function openZip(file: Blob): Promise<ComicSource> {
 
 // ---------- CBR: unrar compiled to WebAssembly, pages extracted in the background ----------
 
-async function openRar(file: Blob, onProgress?: (fraction: number) => void): Promise<ComicSource> {
+async function openRar(file: Blob, onProgress?: (fraction: number) => void, firstPageOnly = false): Promise<ComicSource> {
   const [{ createExtractorFromData }, wasm] = await Promise.all([import("node-unrar-js"), import("node-unrar-js/esm/js/unrar.wasm?url")]);
   const [wasmBinary, data] = await Promise.all([fetch(wasm.default).then((r) => r.arrayBuffer()), file.arrayBuffer()]);
   const extractor = await createExtractorFromData({ wasmBinary, data });
   const names = [...extractor.getFileList().fileHeaders].filter((h) => !h.flags.directory && isPage(h.name)).map((h) => h.name).sort(collator.compare);
   if (!names.length) throw new Error("No images were found inside this comic.");
-  const wanted = new Set(names);
+  const wanted = new Set(firstPageOnly ? names.slice(0, 1) : names);
   const blobs = new Map<string, Blob>();
   const waiting = new Map<string, Array<{ resolve: (b: Blob) => void; reject: (e: Error) => void }>>();
   let failure: Error | null = null;
@@ -186,7 +189,8 @@ async function openRar(file: Blob, onProgress?: (fraction: number) => void): Pro
 // ---------- PDF: pages rendered with pdf.js at screen resolution ----------
 
 async function openPdf(file: Blob): Promise<ComicSource> {
-  const [pdfjs, worker] = await Promise.all([import("pdfjs-dist"), import("pdfjs-dist/build/pdf.worker.min.mjs?url")]);
+  // The legacy build bundles polyfills (e.g. Map.getOrInsertComputed) that current phone browsers lack.
+  const [pdfjs, worker] = await Promise.all([import("pdfjs-dist/legacy/build/pdf.mjs"), import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url")]);
   pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
   const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
   const doc = await task.promise;

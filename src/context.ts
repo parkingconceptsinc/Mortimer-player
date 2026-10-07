@@ -112,7 +112,7 @@ export type PlayerState = {
   sleepRemaining: number | null;
   ab: { a: number | null; b: number | null };
   subtitles: { url: string; name: string } | null;
-  importing: { done: number; total: number } | null;
+  importing: { done: number; total: number; label?: string } | null;
   canInstall: boolean;
   videoRef: RefObject<HTMLVideoElement | null>;
   actions: Actions;
