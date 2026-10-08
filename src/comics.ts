@@ -51,11 +51,14 @@ const isPage = (name: string) => IMAGE.test(name) && !name.includes("__MACOSX") 
 let rarWasmBinary: Promise<ArrayBuffer> | null = null;
 
 export async function openComic(file: Blob, onProgress?: (fraction: number) => void, options?: { firstPageOnly?: boolean }): Promise<ComicSource> {
-  const head = new Uint8Array(await file.slice(0, 6).arrayBuffer());
-  const magic = String.fromCharCode(...head);
+  // Accept PDF headers found within the first 1024 bytes. This tolerates
+  // harmless leading bytes produced by some real-world PDF generators.
+  const head = new Uint8Array(await file.slice(0, Math.min(file.size, 1024)).arrayBuffer());
+  const magic = String.fromCharCode(...head.subarray(0, 6));
+  const headText = String.fromCharCode(...head);
   if (magic.startsWith("PK")) return openZip(file);
   if (magic.startsWith("Rar!")) return openRar(file, onProgress, options?.firstPageOnly);
-  if (magic.startsWith("%PDF")) return openPdf(file);
+  if (/%PDF-\d\.\d/.test(headText) || /%PDF-2\.\d/.test(headText)) return openPdf(file);
   if (head[0] === 0x37 && head[1] === 0x7a && head[2] === 0xbc) throw new Error("7-Zip comics (CB7) aren't supported yet — convert them to CBZ.");
   throw new Error("This file isn't a comic archive this app can read, or it's damaged.");
 }
@@ -218,33 +221,62 @@ async function openRar(file: Blob, onProgress?: (fraction: number) => void, firs
 // ---------- PDF: pages rendered with pdf.js at screen resolution ----------
 
 async function openPdf(file: Blob): Promise<ComicSource> {
-  // The legacy build bundles polyfills (e.g. Map.getOrInsertComputed) that current phone browsers lack.
+  // The legacy build bundles compatibility helpers that are safer on mobile browsers.
   const [pdfjs, worker] = await Promise.all([import("pdfjs-dist/legacy/build/pdf.mjs"), import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url")]);
   pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
-  const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+  const task = pdfjs.getDocument({
+    data: new Uint8Array(await file.arrayBuffer()),
+    // Large embedded scans are common in PDFs. Let PDF.js downsample those
+    // images in the worker instead of forcing huge intermediate bitmaps.
+    canvasMaxAreaInBytes: 32 * 1024 * 1024,
+  });
   const doc = await task.promise;
+
+  const renderPage = async (index: number): Promise<Blob> => {
+    const page = await doc.getPage(index + 1);
+    try {
+      const base = page.getViewport({ scale: 1 });
+      const dpr = Math.min(1.75, Math.max(1, window.devicePixelRatio || 1));
+      const targetWidth = Math.min(2200, Math.max(1100, window.innerWidth * dpr));
+      const requestedScale = targetWidth / Math.max(1, base.width);
+      const maxPixels = 4_000_000;
+      const maxDimension = 4096;
+      let scale = requestedScale;
+      const pixels = base.width * scale * base.height * scale;
+      if (pixels > maxPixels) scale *= Math.sqrt(maxPixels / pixels);
+      const first = page.getViewport({ scale });
+      const largest = Math.max(first.width, first.height);
+      if (largest > maxDimension) scale *= maxDimension / largest;
+
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const viewport = page.getViewport({ scale });
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.floor(viewport.width));
+        canvas.height = Math.max(1, Math.floor(viewport.height));
+        try {
+          await page.render({ canvas, viewport }).promise;
+          const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.88));
+          if (!blob) throw new Error("Couldn't encode the PDF page.");
+          return blob;
+        } catch (error) {
+          canvas.width = 1;
+          canvas.height = 1;
+          if (attempt === 2) throw error instanceof Error ? error : new Error("Couldn't render the PDF page.");
+          scale *= 0.65;
+        }
+      }
+      throw new Error("Couldn't render the PDF page.");
+    } finally {
+      page.cleanup();
+    }
+  };
+
   return {
     pages: doc.numPages,
-    async getPage(index) {
-      const page = await doc.getPage(index + 1);
-      const base = page.getViewport({ scale: 1 });
-      const targetWidth = Math.min(2200, Math.max(1100, window.innerWidth * (window.devicePixelRatio || 1)));
-      const requestedScale = targetWidth / Math.max(1, base.width);
-      const requestedPixels = base.width * requestedScale * base.height * requestedScale;
-      const maxPixels = 4_500_000;
-      const scale = requestedPixels > maxPixels ? requestedScale * Math.sqrt(maxPixels / requestedPixels) : requestedScale;
-      const viewport = page.getViewport({ scale });
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.ceil(viewport.width));
-      canvas.height = Math.max(1, Math.ceil(viewport.height));
-      await page.render({ canvas, viewport }).promise;
-      page.cleanup();
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
-      if (!blob) throw new Error(`Couldn't render page ${index + 1}.`);
-      return blob;
-    },
+    getPage: renderPage,
     close() {
-      void task.destroy();
+      void doc.destroy().catch(() => {});
+      void task.destroy().catch(() => {});
     },
   };
 }
