@@ -132,12 +132,14 @@ async function openZip(file: Blob): Promise<ComicSource> {
       const type = mimeOf(entry.name);
       if (entry.method === 0) return new Blob([raw], { type });
       if (entry.method !== 8) throw new Error(`Page ${index + 1} uses a compression method that isn't supported.`);
-      if (typeof DecompressionStream === "undefined") {
-        const { inflateSync } = await import("fflate");
-        return new Blob([inflateSync(new Uint8Array(await raw.arrayBuffer()))], { type });
-      }
-      const inflated = await new Response(raw.stream().pipeThrough(new DecompressionStream("deflate-raw"))).blob();
-      return new Blob([inflated], { type });
+      try {
+        if (typeof DecompressionStream !== "undefined") {
+          const inflated = await new Response(raw.stream().pipeThrough(new DecompressionStream("deflate-raw"))).blob();
+          return new Blob([inflated], { type });
+        }
+      } catch {}
+      const { inflateSync } = await import("fflate");
+      return new Blob([inflateSync(new Uint8Array(await raw.arrayBuffer()))], { type });
     },
     close() {},
   };
@@ -219,10 +221,14 @@ async function openPdf(file: Blob): Promise<ComicSource> {
       const page = await doc.getPage(index + 1);
       const base = page.getViewport({ scale: 1 });
       const targetWidth = Math.min(2200, Math.max(1100, window.innerWidth * (window.devicePixelRatio || 1)));
-      const viewport = page.getViewport({ scale: targetWidth / base.width });
+      const requestedScale = targetWidth / Math.max(1, base.width);
+      const requestedPixels = base.width * requestedScale * base.height * requestedScale;
+      const maxPixels = 4_500_000;
+      const scale = requestedPixels > maxPixels ? requestedScale * Math.sqrt(maxPixels / requestedPixels) : requestedScale;
+      const viewport = page.getViewport({ scale });
       const canvas = document.createElement("canvas");
-      canvas.width = Math.ceil(viewport.width);
-      canvas.height = Math.ceil(viewport.height);
+      canvas.width = Math.max(1, Math.ceil(viewport.width));
+      canvas.height = Math.max(1, Math.ceil(viewport.height));
       await page.render({ canvas, viewport }).promise;
       page.cleanup();
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
