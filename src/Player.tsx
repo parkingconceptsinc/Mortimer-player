@@ -122,10 +122,6 @@ async function transcodeForBrowser(source: Blob, onProgress: (progress: number) 
   });
 }
 
-function shouldTranscodeVideo(name: string) {
-  return /\b(?:x265|hevc|h[ ._-]?265|ddp(?:\d+(?:\.\d+)?)?|dd\+|e[ ._-]?ac3|ac3|dts)\b/i.test(name);
-}
-
 function shouldTranscodeAudio(name: string) {
   return /\.(?:flac|wma|ac3|eac3|dts|ape|tak|tta|mpc|wv|shn|ra|rm|rma)$/i.test(name)
     || /\b(?:ac3|eac3|ddp|dd\+|dts|dolby|truehd|alac|ape|tak|tta|wv|shn)\b/i.test(name);
