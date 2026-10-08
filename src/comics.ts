@@ -149,53 +149,59 @@ async function openRar(file: Blob, onProgress?: (fraction: number) => void, firs
   const [{ createExtractorFromData }, wasm] = await Promise.all([import("node-unrar-js"), import("node-unrar-js/esm/js/unrar.wasm?url")]);
   const [wasmBinary, data] = await Promise.all([fetch(wasm.default).then((r) => r.arrayBuffer()), file.arrayBuffer()]);
   const extractor = await createExtractorFromData({ wasmBinary, data });
-  const names = [...extractor.getFileList().fileHeaders].filter((h) => !h.flags.directory && isPage(h.name)).map((h) => h.name).sort(collator.compare);
+  const names = [...extractor.getFileList().fileHeaders]
+    .filter((h) => !h.flags.directory && isPage(h.name))
+    .map((h) => h.name)
+    .sort(collator.compare);
   if (!names.length) throw new Error("No images were found inside this comic.");
-  const wanted = new Set(firstPageOnly ? names.slice(0, 1) : names);
-  const blobs = new Map<string, Blob>();
-  const waiting = new Map<string, Array<{ resolve: (b: Blob) => void; reject: (e: Error) => void }>>();
-  let failure: Error | null = null;
+
+  const cache = new Map<number, Blob>();
+  const pending = new Map<number, Promise<Blob>>();
   let closed = false;
 
-  void (async () => {
+  const extractPage = async (index: number): Promise<Blob> => {
+    const cached = cache.get(index);
+    if (cached) return cached;
+    const name = names[index];
+    if (!name) throw new Error("Page not found in archive.");
+    const active = pending.get(index);
+    if (active) return active;
+
+    const task = (async () => {
+      const { files } = extractor.extract({ files: [name] });
+      const fileEntry = files[0];
+      if (!fileEntry?.extraction) throw new Error(`Page ${index + 1} could not be extracted.`);
+      const blob = new Blob([new Uint8Array(fileEntry.extraction)], { type: mimeOf(name) });
+      if (!closed) cache.set(index, blob);
+      onProgress?.((Math.min(cache.size, names.length)) / names.length);
+      return blob;
+    })();
+
+    pending.set(index, task);
     try {
-      const { files } = extractor.extract({ files: (h) => wanted.has(h.name) });
-      let done = 0;
-      for (const f of files) {
-        if (closed) return;
-        const name = f.fileHeader.name;
-        if (f.extraction) {
-          const blob = new Blob([new Uint8Array(f.extraction)], { type: mimeOf(name) });
-          blobs.set(name, blob);
-          waiting.get(name)?.forEach((w) => w.resolve(blob));
-          waiting.delete(name);
-        }
-        onProgress?.(++done / names.length);
-        await new Promise((r) => setTimeout(r, 0));
-      }
-    } catch (error) {
-      failure = error instanceof Error ? error : new Error("Couldn't extract this comic.");
+      return await task;
+    } finally {
+      pending.delete(index);
     }
-    for (const list of waiting.values()) list.forEach((w) => w.reject(failure ?? new Error("Page not found in archive.")));
-    waiting.clear();
-  })();
+  };
+
+  const initial = firstPageOnly ? [0] : [];
+  for (const index of initial) {
+    try { await extractPage(index); } catch {}
+  }
 
   return {
     pages: names.length,
-    getPage(index) {
-      const name = names[index];
-      const ready = blobs.get(name);
-      if (ready) return Promise.resolve(ready);
-      if (failure) return Promise.reject(failure);
-      return new Promise((resolve, reject) => {
-        const list = waiting.get(name) ?? [];
-        list.push({ resolve, reject });
-        waiting.set(name, list);
-      });
+    async getPage(index) {
+      if (closed) throw new Error("This comic has been closed.");
+      return extractPage(index);
     },
     close() {
       closed = true;
-      blobs.clear();
+      pending.clear();
+      for (const [index] of cache) {
+        if (index !== 0) cache.delete(index);
+      }
     },
   };
 }
