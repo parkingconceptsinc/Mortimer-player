@@ -316,21 +316,34 @@ export function Player() {
     try {
       const directory = await picker({ mode: "read" });
       const found: Incoming[] = [];
+      const pending: Array<{ file: () => Promise<File>; path: string }> = [];
+
       const walk = async (dir: DirectoryHandleLike, prefix: string): Promise<void> => {
         for await (const entry of dir.values()) {
           const path = `${prefix}/${entry.name}`;
           if (entry.kind === "file") {
             if ((supported(entry.name) || isComicFile(entry.name)) && entry.getFile) {
-              found.push({ file: await entry.getFile(), path });
-              setImporting({ done: found.length, total: 0, label: "Scanning" });
+              pending.push({ file: entry.getFile, path });
             }
           } else if (!entry.name.startsWith(".")) {
             await walk(entry as DirectoryHandleLike, path);
           }
         }
       };
+
       setImporting({ done: 0, total: 0, label: "Scanning" });
       await walk(directory, directory.name);
+
+      // Read file handles concurrently in small batches instead of awaiting
+      // getFile() one by one. This makes large folder scans much faster.
+      const scanBatchSize = 50;
+      for (let start = 0; start < pending.length; start += scanBatchSize) {
+        const batch = pending.slice(start, start + scanBatchSize);
+        const files = await Promise.all(batch.map(async ({ file, path }) => ({ file: await file(), path })));
+        found.push(...files);
+        setImporting({ done: found.length, total: pending.length, label: "Scanning" });
+      }
+
       setImporting({ done: 0, total: found.length, label: "Adding" });
       await importEntries(found, directory.name);
     } catch (error) {
