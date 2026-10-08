@@ -56,13 +56,18 @@ export async function decodeAudioTrack(source: Blob): Promise<DecodedAudio> {
       const pcmBytes = new Uint8Array(bytes.byteLength);
       pcmBytes.set(bytes);
       const interleaved = new Float32Array(pcmBytes.buffer);
+      if (interleaved.length % 2 !== 0) throw new Error("Invalid stereo PCM");
       const frames = interleaved.length / 2;
       const Ctor = window.AudioContext ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!Ctor) throw new Error("Web Audio is unavailable");
       const context = new Ctor({ sampleRate: 48000 });
       const buffer = context.createBuffer(2, frames, 48000);
-      buffer.copyToChannel(interleaved.subarray(0, frames), 0);
-      buffer.copyToChannel(interleaved.subarray(frames), 1);
+      const left = buffer.getChannelData(0);
+      const right = buffer.getChannelData(1);
+      for (let i = 0, frame = 0; frame < frames; frame++, i += 2) {
+        left[frame] = interleaved[i];
+        right[frame] = interleaved[i + 1];
+      }
       return { context, buffer };
     } finally {
       await engine.deleteFile(input).catch(() => {});
