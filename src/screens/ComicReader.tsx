@@ -592,13 +592,15 @@ function PageGrid({ source, current, cache, onPick }: { source: ComicSource; cur
 
   useEffect(() => {
     const root = grid.current?.closest(".sheetBody") ?? null;
+    let cancelled = false;
     const pump = () => {
       while (busy.current < 2 && queue.current.length) {
         const i = queue.current.shift()!;
         if (cache.has(i)) continue;
         busy.current++;
         source.getPage(i).then((blob) => makeThumbnail(blob, 220)).then((thumb) => {
-          if (thumb) cache.set(i, URL.createObjectURL(thumb));
+          if (cancelled || !thumb) return;
+          cache.set(i, URL.createObjectURL(thumb));
           setVersion((v) => v + 1);
         }).catch(() => {}).finally(() => {
           busy.current--;
@@ -616,7 +618,10 @@ function PageGrid({ source, current, cache, onPick }: { source: ComicSource; cur
     }, { root, rootMargin: "300px" });
     grid.current?.querySelectorAll("[data-page]").forEach((el) => observer.observe(el));
     grid.current?.querySelector(`[data-page="${current}"]`)?.scrollIntoView({ block: "center" });
-    return () => observer.disconnect();
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+    };
   }, [source, cache, current]);
 
   return (
