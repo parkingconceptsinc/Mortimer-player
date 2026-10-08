@@ -230,7 +230,7 @@ async function openPdf(file: Blob): Promise<ComicSource> {
     // images in the worker instead of forcing huge intermediate bitmaps.
     canvasMaxAreaInBytes: 32 * 1024 * 1024,
   });
-  task.onPassword = (updatePassword) => {
+  task.onPassword = (updatePassword: (password: string | Error) => void) => {
     const password = window.prompt("This PDF is password-protected. Enter the password:");
     if (password == null) updatePassword(new Error("A password is required to open this PDF."));
     else updatePassword(password);
