@@ -906,13 +906,14 @@ export function Player() {
             const id = current.id;
             videoAudioProbeTimer.current = window.setTimeout(() => {
               if (mediaRef.current !== video || current?.id !== id || video.paused || video.currentTime < 0.75) return;
+              if (transcodedUrls.has(id) || video.currentSrc !== current.url) return;
               const decoded = (video as HTMLVideoElement & { webkitAudioDecodedByteCount?: number }).webkitAudioDecodedByteCount;
-              const nameLooksProblematic = /\.(mkv|avi|3gp)$/i.test(current.name)
+              const nameLooksProblematic = /\.(mkv|avi|3gp|ts|m2ts|mts|vob|wmv|asf|flv|f4v|rmvb|rm)$/i.test(current.name)
                 || /\b(?:x265|x264|h[ ._-]?265|hevc|ac3|e[ ._-]?ac3|ddp|dd\+|dts)\b/i.test(current.name);
               // Some browsers keep playing the video track while silently dropping
-              // an unsupported audio codec. In Chromium, zero decoded audio bytes
-              // after playback has started is a strong signal for that case.
-              if (nameLooksProblematic || decoded === 0) handlers.current.onError();
+              // an unsupported audio codec. Convert the original source before
+              // treating it as a real playback error.
+              if (nameLooksProblematic || decoded === 0) requestMediaTranscode(current, "video");
             }, 1400);
           }
           break;
@@ -1094,6 +1095,12 @@ export function Player() {
       setThumbTick((n) => n + 1);
     })();
   }, [comics, screen, reader, thumbTick]);
+
+  useEffect(() => () => {
+    window.clearTimeout(videoAudioProbeTimer.current);
+    for (const url of transcodedUrls.values()) URL.revokeObjectURL(url);
+    transcodedUrls.clear();
+  }, []);
 
   useEffect(() => {
     if (!loaded || rescanStarted.current) return;
@@ -1328,7 +1335,9 @@ export function Player() {
           {toastMessage && <div className="toast" role="status">{toastMessage}</div>}
 
           <audio ref={audioRef} preload="auto" />
-          <input ref={fileInput} hidden type="file" multiple accept="audio/*,video/*,.flac,.mkv,.avi,.mov,.aac,.opus,.m4a,.wma,.cbz,.cbr,.pdf,.epub,application/pdf,application/epub+zip" onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
+          <input ref={fileInput} hidden type="file" multiple
+            accept="audio/*,video/*,text/*,.flac,.aac,.ogg,.oga,.opus,.weba,.aiff,.aif,.alac,.wma,.mka,.mp2,.mpa,.ac3,.eac3,.dts,.amr,.ape,.tak,.tta,.mpc,.wv,.shn,.caf,.au,.snd,.ra,.rm,.rma,.mp4,.webm,.ogv,.mov,.m4v,.mkv,.avi,.3gp,.3g2,.ts,.m2ts,.mts,.m2v,.mpg,.mpeg,.mpeg2,.vob,.wmv,.asf,.flv,.f4v,.rmvb,.rm,.dv,.tod,.mod,.vro,.nut,.ogm,.mxf,.divx,.cbz,.cbr,.pdf,.epub,.txt,.md,.markdown,.log,.nfo,.csv,.tsv,.json,.xml,.yaml,.yml,.toml,.ini,.cfg,.conf,.srt,.vtt,.ass,.ssa,.sub,.html,.htm,.rtf,.docx,.odt,application/pdf,application/epub+zip,application/rtf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text"
+            onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
           <input ref={folderInput} hidden type="file" multiple onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} {...({ webkitdirectory: "" } as InputHTMLAttributes<HTMLInputElement>)} />
         </div>
       </ProgressContext.Provider>
