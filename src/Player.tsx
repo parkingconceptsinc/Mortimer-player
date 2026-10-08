@@ -5,7 +5,7 @@ import { BookOpen, Clapperboard, Disc3, Download, FilePlus, FolderOpen, Library 
 import { applyAudio, attachElement, EQ_PRESETS, initEngine, resumeEngine } from "./audioEngine";
 import { PlayerContext, ProgressContext, type Actions, type MenuTarget, type PlayerState, type SleepState } from "./context";
 import { clearLibrary as clearStoredLibrary, deleteComics, deleteTracks, loadComics, loadLibrary, patchComic, patchTrack, saveComics, saveLibrary, type StoredComic, type StoredLibraryItem } from "./library";
-import { comicFormatOf, defaultShelf, isComicFile, makeThumbnail, openComic, toComic } from "./comics";
+import { comicFormatOf, defaultShelf, isComicFile, isTextFormat, makeThumbnail, openComic, toComic } from "./comics";
 import { META_VERSION, readItem, readTags, type Incoming } from "./metadata";
 import { readPref, usePref, writePref } from "./prefs";
 import type { Comic, ComicProgress, EqSettings, Playlist, ReaderSettings, RepeatMode, Route, Screen, SongSort, Track, VideoFit } from "./types";
@@ -1079,7 +1079,7 @@ export function Player() {
           const epub = await readEpubInfo(next.file);
           info = { title: epub.title, author: epub.author };
           if (epub.cover) image = await makeThumbnail(epub.cover, 360);
-        } else {
+        } else if (next.format === "cbz" || next.format === "cbr" || next.format === "pdf") {
           const source = await openComic(next.file, undefined, { firstPageOnly: true });
           pages = source.pages;
           if (!next.cover) image = await makeThumbnail(await source.getPage(0), 360);
@@ -1324,7 +1324,7 @@ export function Player() {
             ))}
           </nav>
 
-          {reader && (() => { const item = comics.find((c) => c.id === reader.id); return item?.format === "epub" ? <EpubReader key={reader.id} /> : item && ["txt", "md", "markdown", "log", "nfo", "csv", "tsv", "json", "xml", "yaml", "yml", "toml", "ini", "cfg", "conf", "srt", "vtt", "ass", "ssa", "sub", "html", "htm", "rtf", "docx", "odt"].includes(item.format) ? <TextReader key={reader.id} /> : <ComicReader key={reader.id} />; })()}
+          {reader && (() => { const item = comics.find((c) => c.id === reader.id); return item?.format === "epub" ? <EpubReader key={reader.id} /> : item && isTextFormat(item.format) ? <TextReader key={reader.id} /> : <ComicReader key={reader.id} />; })()}
           {menu && <TrackMenu target={menu} onClose={() => actions.back()} />}
           {importing && (
             <div className="importBar" role="status">
