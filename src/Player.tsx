@@ -951,8 +951,10 @@ export function Player() {
         case "timeupdate":
           if (el === video && codecAudioRef.current?.id === current?.id) {
             const state = codecAudioRef.current;
-            const expected = state.offset + (state.context.currentTime - state.startedAt) * speed;
-            if (Math.abs(expected - video.currentTime) > 0.18) startCodecAudio(video.currentTime);
+            if (state) {
+              const expected = state.offset + (state.context.currentTime - state.startedAt) * speed;
+              if (Math.abs(expected - video.currentTime) > 0.18) startCodecAudio(video.currentTime);
+            }
           }
           handlers.current.onTime(el);
           break;
