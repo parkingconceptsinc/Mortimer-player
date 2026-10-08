@@ -417,7 +417,6 @@ export function Player() {
     }
     setQueue(nextQueue);
     setOriginalQueue((q) => q && q.filter((id) => !gone.has(id)));
-    revokeTranscoded(gone);
     setTracks((old) => {
       for (const t of old) {
         if (!gone.has(t.id)) continue;
@@ -599,7 +598,6 @@ export function Player() {
           return;
         }
         clearQueue();
-        revokeTranscoded();
         setTracks((old) => {
           for (const t of old) {
             URL.revokeObjectURL(t.url);
@@ -831,8 +829,7 @@ export function Player() {
           break;
         }
         case "pause":
-          window.clearTimeout(videoAudioProbeTimer.current);
-          setPlaying(false);
+                setPlaying(false);
           handlers.current.onPause();
           break;
         case "timeupdate": handlers.current.onTime(el); break;
@@ -881,11 +878,6 @@ export function Player() {
     const video = videoRef.current;
     if (!audio || !video) return;
     window.clearTimeout(videoAudioProbeTimer.current);
-    const previous = loadedTrack.current;
-    if (previous?.kind === "video" && video.getAttribute("src") && video.currentTime > 0 && !video.ended) {
-      const t = video.currentTime;
-      setVideoProgress((p) => ({ ...p, [previous.id]: t }));
-    }
     const el = current?.kind === "video" ? video : audio;
     const other = el === audio ? video : audio;
     mediaRef.current = el;
