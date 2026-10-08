@@ -594,21 +594,27 @@ function PageGrid({ source, current, cache, onPick }: { source: ComicSource; cur
     const root = grid.current?.closest(".sheetBody") ?? null;
     let cancelled = false;
     const pump = () => {
+      if (cancelled) return;
       while (busy.current < 2 && queue.current.length) {
         const i = queue.current.shift()!;
         if (cache.has(i)) continue;
         busy.current++;
-        source.getPage(i).then((blob) => makeThumbnail(blob, 220)).then((thumb) => {
-          if (cancelled || !thumb) return;
-          cache.set(i, URL.createObjectURL(thumb));
-          setVersion((v) => v + 1);
-        }).catch(() => {}).finally(() => {
-          busy.current--;
-          pump();
-        });
+        source.getPage(i)
+          .then((blob) => makeThumbnail(blob, 220))
+          .then((thumb) => {
+            if (cancelled || !thumb) return;
+            cache.set(i, URL.createObjectURL(thumb));
+            setVersion((v) => v + 1);
+          })
+          .catch(() => {})
+          .finally(() => {
+            busy.current--;
+            pump();
+          });
       }
     };
     const observer = new IntersectionObserver((entries) => {
+      if (cancelled) return;
       for (const entry of entries) {
         const i = Number((entry.target as HTMLElement).dataset.page);
         if (entry.isIntersecting && !cache.has(i) && !queue.current.includes(i)) queue.current.push(i);
@@ -617,12 +623,19 @@ function PageGrid({ source, current, cache, onPick }: { source: ComicSource; cur
       pump();
     }, { root, rootMargin: "300px" });
     grid.current?.querySelectorAll("[data-page]").forEach((el) => observer.observe(el));
-    grid.current?.querySelector(`[data-page="${current}"]`)?.scrollIntoView({ block: "center" });
+    pump();
     return () => {
       cancelled = true;
       observer.disconnect();
+      queue.current = [];
+      for (const url of cache.values()) URL.revokeObjectURL(url);
+      cache.clear();
     };
-  }, [source, cache, current]);
+  }, [source, cache]);
+
+  useEffect(() => {
+    grid.current?.querySelector(`[data-page="${current}"]`)?.scrollIntoView({ block: "center" });
+  }, [current]);
 
   return (
     <div className="pageGrid" ref={grid}>
@@ -635,4 +648,3 @@ function PageGrid({ source, current, cache, onPick }: { source: ComicSource; cur
     </div>
   );
 }
-
