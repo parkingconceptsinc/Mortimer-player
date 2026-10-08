@@ -14,7 +14,9 @@ export function Settings() {
   const p = usePlayer();
   const { actions } = p;
   const [storage, setStorage] = useState<{ usage?: number; quota?: number; persisted?: boolean }>({});
-  const librarySize = p.tracks.reduce((sum, t) => sum + t.size, 0);
+  const musicVideoSize = p.tracks.reduce((sum, t) => sum + t.size, 0);
+  const booksComicsSize = p.comics.reduce((sum, c) => sum + c.size, 0);
+  const librarySize = musicVideoSize + booksComicsSize;
 
   const refreshStorage = () => {
     void Promise.all([navigator.storage?.estimate?.(), navigator.storage?.persisted?.()])
@@ -72,7 +74,7 @@ export function Settings() {
           <button className="btn" onClick={actions.importFolder}><FolderOpen size={17} /> Add folder</button>
           <button className="btn" onClick={actions.importFiles}><FilePlus size={17} /> Add files</button>
         </div>
-        <Row label={`${p.tracks.length} items · ${formatSize(librarySize)}`} hint={storage.quota ? `Using ${formatSize(storage.usage ?? 0)} of ${formatSize(storage.quota)} available to this app` : undefined}>
+        <Row label={`${p.tracks.length} media · ${p.comics.length} books/comics · ${formatSize(librarySize)}`} hint={storage.quota ? `Using ${formatSize(storage.usage ?? 0)} of ${formatSize(storage.quota)} available to this app` : undefined}>
           <HardDrive size={20} className="muted" />
         </Row>
         <Row label="Protect library from automatic cleanup" hint={storage.persisted ? "Granted — the browser won't evict your library" : "Asks the browser to keep your files even when space runs low"}>
@@ -85,8 +87,8 @@ export function Settings() {
             }}>Enable</button>
           )}
         </Row>
-        <button className="btn danger wide" disabled={!p.tracks.length} onClick={() => {
-          if (window.confirm("Remove every song and video from the app? Your original files are not touched.")) actions.clearLibrary();
+        <button className="btn danger wide" disabled={!p.tracks.length && !p.comics.length} onClick={() => {
+          if (window.confirm("Remove all music, videos, books and comics from the app? Your original files are not touched.")) actions.clearLibrary();
         }}><Trash2 size={16} /> Clear library</button>
       </Card>
 
