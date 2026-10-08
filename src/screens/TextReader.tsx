@@ -51,7 +51,7 @@ export function TextReader() {
   const [ui, setUi] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
   const url = useMemo(() => {
-    if (!book || !/\\.(html|htm)$/i.test(book.name)) return null;
+    if (!book || (book.format !== "html" && book.format !== "htm")) return null;
     return URL.createObjectURL(book.file);
   }, [book?.id]);
 
@@ -114,7 +114,7 @@ export function TextReader() {
   };
 
   if (!book) return null;
-  const html = /\\.(html|htm)$/i.test(book.name);
+  const html = book.format === "html" || book.format === "htm";
 
   return (
     <div className="reader textReader" role="dialog" aria-label={book.title}>
