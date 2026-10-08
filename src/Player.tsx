@@ -64,81 +64,6 @@ function enqueueMetadata(task: () => Promise<void>) {
   startMetadataPump();
 }
 
-function shouldTranscodeVideo(name: string) {
-  return /\b(?:x265|hevc|h[ ._-]?265|ddp(?:\d+(?:\.\d+)?)?|dd\+|e[ ._-]?ac3|ac3|dts|10bit)\b/i.test(name);
-}
-
-async function transcodeForBrowser(source: Blob, onProgress: (progress: number) => void, mode: "video" | "audio", id: string): Promise<Blob> {
-  return enqueueFfmpeg(async () => {
-    if (!ffmpeg.loaded) {
-      ffmpegLoad ??= (async () => {
-        const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
-        await ffmpeg.load({
-          coreURL: await toBlobURL(baseURL + "/ffmpeg-core.js", "text/javascript"),
-          wasmURL: await toBlobURL(baseURL + "/ffmpeg-core.wasm", "application/wasm"),
-        });
-      })().catch((error) => {
-        ffmpegLoad = null;
-        throw error;
-      });
-      await ffmpegLoad;
-    }
-    const safeId = id.replace(/[^a-z0-9_-]/gi, "").slice(0, 24) || "item";
-    const input = "mortimer-input-" + safeId + (mode === "audio" ? ".audio" : ".mkv");
-    const output = mode === "audio" ? "mortimer-output-" + safeId + ".m4a" : "mortimer-output-" + safeId + ".mp4";
-    const progress = ({ progress }: { progress: number }) => onProgress(Math.max(0, Math.min(1, progress)));
-    ffmpeg.on("progress", progress);
-    try {
-      await ffmpeg.writeFile(input, await fetchFile(source));
-      const args = mode === "audio"
-        ? [
-            "-i", input,
-            "-map", "0:a:0?",
-            "-vn",
-            "-c:a", "aac",
-            "-profile:a", "aac_low",
-            "-ac", "2",
-            "-ar", "48000",
-            "-b:a", "192k",
-            "-movflags", "+faststart",
-            "-y", output,
-          ]
-        : [
-            "-i", input,
-            "-map", "0:v:0",
-            "-map", "0:a:0?",
-            "-c:v", "libx264",
-            "-preset", "ultrafast",
-            "-crf", "23",
-            "-pix_fmt", "yuv420p",
-            "-c:a", "aac",
-            "-profile:a", "aac_low",
-            "-ac", "2",
-            "-ar", "48000",
-            "-b:a", "192k",
-            "-movflags", "+faststart",
-            "-y", output,
-          ];
-      const code = await ffmpeg.exec(args);
-      if (code !== 0) throw new Error("FFmpeg could not transcode this file");
-      const data = await ffmpeg.readFile(output);
-      const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
-      const buffer = new ArrayBuffer(bytes.byteLength);
-      new Uint8Array(buffer).set(bytes);
-      return new Blob([buffer], { type: mode === "audio" ? "audio/mp4" : "video/mp4" });
-    } finally {
-      ffmpeg.off("progress", progress);
-      await ffmpeg.deleteFile(input).catch(() => {});
-      await ffmpeg.deleteFile(output).catch(() => {});
-    }
-  });
-}
-
-function shouldTranscodeAudio(name: string) {
-  return /\.(?:flac|wma|ac3|eac3|dts|ape|tak|tta|mpc|wv|shn|ra|rm|rma)$/i.test(name)
-    || /\b(?:ac3|eac3|ddp|dd\+|dts|dolby|truehd|alac|ape|tak|tta|wv|shn)\b/i.test(name);
-}
-
 export function Player() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -157,8 +82,6 @@ export function Player() {
   const comicBusy = useRef(false);
   const rescanStarted = useRef(false);
   const returnScreen = useRef<Screen>("library");
-  const currentRef = useRef<Track | undefined>(undefined);
-  const loadedTrack = useRef<{ id: string; kind: Track["kind"] } | null>(null);
 
   const [loaded, setLoaded] = useState(false);
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -216,7 +139,6 @@ export function Player() {
   const trackMap = useMemo(() => new Map(tracks.map((t) => [t.id, t])), [tracks]);
   const favorites = useMemo(() => new Set(favoritesList), [favoritesList]);
   const current = trackMap.get(queue[qIndex] ?? "");
-  currentRef.current = current;
   const sleepRemaining = sleep.endsAt ? Math.max(0, sleep.endsAt - now) / 1000 : null;
   const sleepFade = sleepRemaining != null && sleepRemaining < 15 ? sleepRemaining / 15 : 1;
 
@@ -872,7 +794,6 @@ export function Player() {
     onError() {
       const el = mediaRef.current;
       if (!current || !el) return;
-      if (loadedTrack.current?.id !== current.id) return;
       const code = el.error?.code;
       const reason = code === MediaError.MEDIA_ERR_ABORTED
         ? "playback was aborted"
@@ -965,7 +886,6 @@ export function Player() {
       const t = video.currentTime;
       setVideoProgress((p) => ({ ...p, [previous.id]: t }));
     }
-    loadedTrack.current = current ? { id: current.id, kind: current.kind } : null;
     const el = current?.kind === "video" ? video : audio;
     const other = el === audio ? video : audio;
     mediaRef.current = el;
