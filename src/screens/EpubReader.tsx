@@ -116,8 +116,9 @@ export function EpubReader() {
       book = await openEpub(comic.file);
       if (cancelled) return book.destroy();
       bookRef.current = book;
-      const nav = await book.loaded.navigation;
-      const flatToc = flatten(nav.toc);
+      const flatToc = await book.loaded.navigation
+        .then((nav) => flatten(nav.toc))
+        .catch(() => [] as Toc);
       setToc(flatToc);
       const rendition = book.renderTo(host, {
         width: "100%",
@@ -180,16 +181,21 @@ export function EpubReader() {
       await rendition.display(lastCfi.current || undefined).catch(() => rendition.display());
       if (cancelled) return;
       setReady(true);
-      const cached = await loadComicLocations(comic.id).catch(() => undefined);
-      if (cancelled) return;
-      if (cached) book.locations.load(cached);
-      else {
-        await book.locations.generate(1200);
+      try {
+        const cached = await loadComicLocations(comic.id);
         if (cancelled) return;
-        void patchComic(comic.id, { locations: book.locations.save() }).catch(() => {});
+        if (cached) book.locations.load(cached);
+        else {
+          await book.locations.generate(1200);
+          if (cancelled) return;
+          void patchComic(comic.id, { locations: book.locations.save() }).catch(() => {});
+        }
+        if (lastCfi.current) setPosition((p) => ({ ...p, pct: book!.locations.percentageFromCfi(lastCfi.current!) }));
+      } catch {
+        // Page rendering should remain usable even when location generation/cache fails.
+      } finally {
+        if (!cancelled) setLocationsReady(true);
       }
-      setLocationsReady(true);
-      if (lastCfi.current) setPosition((p) => ({ ...p, pct: book!.locations.percentageFromCfi(lastCfi.current!) }));
     })().catch((e: Error) => { if (!cancelled) setError(e?.message || "Couldn't open this book."); });
     return () => {
       cancelled = true;
