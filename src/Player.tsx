@@ -95,7 +95,7 @@ function enqueueMetadata(task: () => Promise<void>) {
 }
 
 function shouldTranscodeVideo(name: string) {
-  return /\b(?:x265|hevc|h[ ._-]?265|ddp(?:\d+(?:\.\d+)?)?|dd\+|e[ ._-]?ac3|ac3|dts)\b/i.test(name);
+  return /\b(?:x265|hevc|h[ ._-]?265|ddp(?:\d+(?:\.\d+)?)?|dd\+|e[ ._-]?ac3|ac3|dts|10bit)\b/i.test(name);
 }
 
 async function transcodeForBrowser(source: Blob, onProgress: (progress: number) => void, mode: "video" | "audio", id: string): Promise<Blob> {
