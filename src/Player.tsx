@@ -59,6 +59,22 @@ function enqueueFfmpeg<T>(task: () => Promise<T>) {
   return next;
 }
 
+const metadataQueue: Array<() => Promise<void>> = [];
+let metadataPump: Promise<void> | null = null;
+
+function enqueueMetadata(task: () => Promise<void>) {
+  metadataQueue.push(task);
+  metadataPump ??= (async () => {
+    while (metadataQueue.length) {
+      const batch = metadataQueue.splice(0, 4);
+      await Promise.allSettled(batch.map((job) => job()));
+    }
+  })().finally(() => {
+    metadataPump = null;
+    if (metadataQueue.length) enqueueMetadata(async () => {});
+  });
+}
+
 function shouldTranscodeVideo(name: string) {
   return /\b(?:x265|hevc|h[ ._-]?265|ddp(?:\d+(?:\.\d+)?)?|dd\+|e[ ._-]?ac3|ac3|dts)\b/i.test(name);
 }
@@ -365,8 +381,9 @@ export function Player() {
       // the actual file to the library.
       for (const item of items) {
         if (item.kind !== "audio") continue;
-        void readTags(item.file, item.name).then((tags) => {
-          if (libraryStorageOk) void patchTrack(item.id, tags).catch(() => {});
+        enqueueMetadata(async () => {
+          const tags = await readTags(item.file, item.name);
+          if (libraryStorageOk) await patchTrack(item.id, tags).catch(() => {});
           setTracks((old) => old.map((track) => {
             if (track.id !== item.id) return track;
             const cover = tags.cover ? URL.createObjectURL(tags.cover) : track.cover;
