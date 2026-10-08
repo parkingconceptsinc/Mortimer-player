@@ -4,7 +4,7 @@ import { kindOf, stripExt } from "./util";
 type ParseBlob = typeof import("music-metadata").parseBlob;
 
 // Bump when tag reading improves; older library items get re-read in the background.
-export const META_VERSION = 2;
+export const META_VERSION = 3;
 
 let parser: Promise<ParseBlob | null> | null = null;
 const loadParser = () => (parser ??= import("music-metadata").then((m) => m.parseBlob).catch(() => null));
