@@ -23,7 +23,7 @@ export function Settings() {
       .then(([estimate, persisted]) => setStorage({ usage: estimate?.usage, quota: estimate?.quota, persisted }))
       .catch(() => {});
   };
-  useEffect(refreshStorage, [p.tracks.length]);
+  useEffect(refreshStorage, [p.tracks.length, p.comics.length]);
 
   return (
     <section className="screen settingsScreen">
