@@ -51,6 +51,10 @@ let ffmpegLoad: Promise<void> | null = null;
 const transcodedUrls = new Map<string, string>();
 const transcoding = new Set<string>();
 
+function shouldTranscodeVideo(name: string) {
+  return /\b(?:x265|hevc|h[ ._-]?265|ddp(?:\d+(?:\.\d+)?)?|dd\+|e[ ._-]?ac3|ac3|dts)\b/i.test(name);
+}
+
 async function transcodeForBrowser(source: Blob, onProgress: (progress: number) => void): Promise<Blob> {
   if (!ffmpeg.loaded) {
     ffmpegLoad ??= (async () => {
@@ -59,7 +63,10 @@ async function transcodeForBrowser(source: Blob, onProgress: (progress: number) 
         coreURL: await toBlobURL(baseURL + "/ffmpeg-core.js", "text/javascript"),
         wasmURL: await toBlobURL(baseURL + "/ffmpeg-core.wasm", "application/wasm"),
       });
-    })();
+    })().catch((error) => {
+      ffmpegLoad = null;
+      throw error;
+    });
     await ffmpegLoad;
   }
   const input = "mortimer-input.mkv";
@@ -731,6 +738,40 @@ export function Player() {
     return stable as unknown as Actions;
   });
 
+  const requestVideoTranscode = (item: Track) => {
+    if (transcodedUrls.has(item.id) || transcoding.has(item.id)) return;
+    const id = item.id;
+    const sourceUrl = item.url;
+    transcoding.add(id);
+    setImporting({ done: 0, total: 100, label: "Converting video for browser" });
+    void (async () => {
+      try {
+        const source = await fetch(sourceUrl).then((response) => {
+          if (!response.ok) throw new Error("Could not read the video");
+          return response.blob();
+        });
+        const converted = await transcodeForBrowser(source, (progress) => {
+          if (current?.id === id) {
+            setImporting({ done: Math.round(progress * 100), total: 100, label: "Converting video for browser" });
+          }
+        });
+        const url = URL.createObjectURL(converted);
+        transcodedUrls.set(id, url);
+        const video = videoRef.current;
+        if (current?.id === id && mediaRef.current === video && video) {
+          video.src = url;
+          video.load();
+          if (wantPlay.current) startPlayback(video);
+        }
+      } catch {
+        if (current?.id === id) toast("FFmpeg could not convert this video");
+      } finally {
+        transcoding.delete(id);
+        if (current?.id === id) setImporting(null);
+      }
+    })();
+  };
+
   const handlers = useRef({ onTime: (_el: HTMLMediaElement) => {}, onMeta: (_el: HTMLMediaElement) => {}, onEnded: () => {}, onError: () => {}, onPause: () => {}, onBack: () => {} });
   handlers.current = {
     onTime(el) {
@@ -791,35 +832,8 @@ export function Player() {
     onError() {
       if (!current) return;
       const el = mediaRef.current;
-      if (current.kind === "video" && !transcodedUrls.has(current.id) && !transcoding.has(current.id)) {
-        const id = current.id;
-        const sourceUrl = current.url;
-        transcoding.add(id);
-        setImporting({ done: 0, total: 100, label: "Converting video for browser" });
-        void (async () => {
-          try {
-            const source = await fetch(sourceUrl).then((response) => {
-              if (!response.ok) throw new Error("Could not read the video");
-              return response.blob();
-            });
-            const converted = await transcodeForBrowser(source, (progress) => {
-              if (current.id === id) setImporting({ done: Math.round(progress * 100), total: 100, label: "Converting video for browser" });
-            });
-            const url = URL.createObjectURL(converted);
-            transcodedUrls.set(id, url);
-            const video = videoRef.current;
-            if (current.id === id && mediaRef.current === video && video) {
-              video.src = url;
-              video.load();
-              if (wantPlay.current) startPlayback(video);
-            }
-          } catch {
-            if (current.id === id) toast("FFmpeg could not convert this video");
-          } finally {
-            transcoding.delete(id);
-            if (current.id === id) setImporting(null);
-          }
-        })();
+      if (current.kind === "video" && !transcodedUrls.has(current.id)) {
+        requestVideoTranscode(current);
         return;
       }
       const code = el?.error?.code;
@@ -959,6 +973,10 @@ export function Player() {
     }
     setCurrentTime(pendingSeek.current ?? 0);
     setDuration(current.duration ?? 0);
+    if (current.kind === "video" && !transcodedUrls.has(current.id) && shouldTranscodeVideo(current.name)) {
+      requestVideoTranscode(current);
+      return;
+    }
     el.src = current.kind === "video" ? (transcodedUrls.get(current.id) ?? current.url) : current.url;
     el.defaultPlaybackRate = speed;
     el.playbackRate = speed;
