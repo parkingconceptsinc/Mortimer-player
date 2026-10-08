@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type InputHTMLAttributes } from "react";
 import { BookOpen, Clapperboard, Disc3, Download, FilePlus, FolderOpen, Library as LibraryIcon, ListMusic, Settings as SettingsIcon, SlidersHorizontal, type LucideIcon } from "lucide-react";
 import { applyAudio, attachElement, EQ_PRESETS, initEngine, resumeEngine } from "./audioEngine";
+import { decodeAudioTrack, type DecodedAudio } from "./codecAudioDecoder";
 import { PlayerContext, ProgressContext, type Actions, type MenuTarget, type PlayerState, type SleepState } from "./context";
 import { clearLibrary as clearStoredLibrary, deleteComics, deleteTracks, loadComics, loadLibrary, patchComic, patchTrack, saveComics, saveLibrary, type StoredComic, type StoredLibraryItem } from "./library";
 import { comicFormatOf, defaultShelf, isComicFile, isTextFormat, makeThumbnail, openComic, toComic } from "./comics";
@@ -42,6 +43,7 @@ type DirectoryEntry = { kind: "file" | "directory"; name: string; getFile?: () =
 type DirectoryHandleLike = { name: string; values: () => AsyncIterable<DirectoryEntry> };
 
 const MEDIA_EVENTS = ["play", "pause", "timeupdate", "loadedmetadata", "durationchange", "ended", "error"] as const;
+type CodecAudioState = DecodedAudio & { id: string; source: AudioBufferSourceNode | null; gain: GainNode; startedAt: number; offset: number };
 
 const metadataQueue: Array<() => Promise<void>> = [];
 let metadataPump: Promise<void> | null = null;
@@ -82,6 +84,10 @@ export function Player() {
   const comicBusy = useRef(false);
   const rescanStarted = useRef(false);
   const returnScreen = useRef<Screen>("library");
+  const codecAudioRef = useRef<CodecAudioState | null>(null);
+  const codecFallbackBusy = useRef<string | null>(null);
+  const codecFallbackAttempted = useRef(new Set<string>());
+  const videoAudioProbeTimer = useRef<number | undefined>(undefined);
 
   const [loaded, setLoaded] = useState(false);
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -163,6 +169,66 @@ export function Player() {
     else if (routes.length > 1) setRoutes((r) => r.slice(0, -1));
   }
 
+  function stopCodecAudio() {
+    const state = codecAudioRef.current;
+    codecAudioRef.current = null;
+    if (!state) return;
+    try { state.source?.stop(); } catch {}
+    state.source?.disconnect();
+    state.gain.disconnect();
+    void state.context.close().catch(() => {});
+  }
+
+  function startCodecAudio(offset: number) {
+    const state = codecAudioRef.current;
+    const video = videoRef.current;
+    if (!state || !video || state.id !== current?.id) return;
+    const safeOffset = Math.max(0, Math.min(offset, Math.max(0, state.buffer.duration - 0.01)));
+    try { state.source?.stop(); } catch {}
+    state.source?.disconnect();
+    const source = state.context.createBufferSource();
+    source.buffer = state.buffer;
+    source.playbackRate.value = speed;
+    source.connect(state.gain);
+    state.source = source;
+    state.offset = safeOffset;
+    state.startedAt = state.context.currentTime;
+    void state.context.resume().catch(() => {});
+    try { source.start(0, safeOffset); } catch {}
+  }
+
+  async function activateCodecAudio(item: Track, el: HTMLMediaElement) {
+    if (item.kind !== "video" || el !== videoRef.current) return false;
+    if (codecFallbackBusy.current === item.id) return false;
+    if (codecFallbackAttempted.current.has(item.id)) return !!codecAudioRef.current;
+    codecFallbackBusy.current = item.id;
+    codecFallbackAttempted.current.add(item.id);
+    setImporting({ done: 0, total: 100, label: "Decoding video audio" });
+    try {
+      const response = await fetch(item.url);
+      if (!response.ok) throw new Error("Could not read the original media");
+      const decoded = await decodeAudioTrack(await response.blob());
+      if (current?.id !== item.id || videoRef.current !== el) {
+        void decoded.context.close().catch(() => {});
+        return false;
+      }
+      const gain = decoded.context.createGain();
+      gain.gain.value = muted ? 0 : Math.max(0, Math.min(1, volume * sleepFade));
+      gain.connect(decoded.context.destination);
+      codecAudioRef.current = { ...decoded, id: item.id, source: null, gain, startedAt: decoded.context.currentTime, offset: el.currentTime };
+      el.muted = true;
+      if (!el.paused) startCodecAudio(el.currentTime);
+      toast("Using the original video audio codec");
+      return true;
+    } catch {
+      codecFallbackAttempted.current.delete(item.id);
+      return false;
+    } finally {
+      codecFallbackBusy.current = null;
+      if (current?.id === item.id) setImporting(null);
+    }
+  }
+
   function startPlayback(el: HTMLMediaElement) {
     resumeEngine();
     wantPlay.current = true;
@@ -209,6 +275,7 @@ export function Player() {
 
   function playTracks(ids: string[], startId?: string, options?: { shuffle?: boolean; source?: string }) {
     if (!ids.length) return;
+    stopCodecAudio();
     const useShuffle = options?.shuffle ?? shuffle;
     if (options?.shuffle !== undefined) setShuffle(options.shuffle);
     let startIdx = startId ? Math.max(0, ids.indexOf(startId)) : 0;
@@ -238,6 +305,7 @@ export function Player() {
   }
 
   function clearQueue() {
+    stopCodecAudio();
     wantPlay.current = false;
     mediaRef.current?.pause();
     setQueue([]);
@@ -793,6 +861,16 @@ export function Player() {
       const el = mediaRef.current;
       if (!current || !el) return;
       const code = el.error?.code;
+      if (current.kind === "video" && (code === MediaError.MEDIA_ERR_DECODE || code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) && !codecFallbackAttempted.current.has(current.id)) {
+        void activateCodecAudio(current, el).then((ok) => {
+          if (!ok && current?.id === el.getAttribute("data-mortimer-id")) {
+            wantPlay.current = false;
+            setPlaying(false);
+            toast("This video audio codec could not be decoded");
+          }
+        });
+        return;
+      }
       const reason = code === MediaError.MEDIA_ERR_ABORTED
         ? "playback was aborted"
         : code === MediaError.MEDIA_ERR_NETWORK
@@ -826,21 +904,49 @@ export function Player() {
         case "play": {
           setPlaying(true);
           resumeEngine();
+          if (el === video && codecAudioRef.current?.id === current?.id) startCodecAudio(video.currentTime);
+          if (el === video && current?.kind === "video" && !codecAudioRef.current && !codecFallbackAttempted.current.has(current.id)) {
+            window.clearTimeout(videoAudioProbeTimer.current);
+            const item = current;
+            videoAudioProbeTimer.current = window.setTimeout(() => {
+              const live = current;
+              if (live?.id !== item.id || mediaRef.current !== video || video.paused) return;
+              const decodedBytes = (video as HTMLVideoElement & { webkitAudioDecodedByteCount?: number }).webkitAudioDecodedByteCount;
+              const suspiciousName = /\\.(mkv|mka|avi|ts|m2ts|mts|vob|wmv|asf|flv|f4v|rmvb|rm)$/i.test(item.name)
+                || /\\b(?:ac3|e[ ._-]?ac3|ddp|dd\\+|dts|truehd|dolby)\\b/i.test(item.name);
+              if (decodedBytes === 0 || (decodedBytes == null && suspiciousName)) void activateCodecAudio(item, video);
+            }, 1400);
+          }
           break;
         }
         case "pause":
                 setPlaying(false);
           handlers.current.onPause();
           break;
-        case "timeupdate": handlers.current.onTime(el); break;
+        case "timeupdate":
+          if (el === video && codecAudioRef.current?.id === current?.id) {
+            const state = codecAudioRef.current;
+            const expected = state.offset + (state.context.currentTime - state.startedAt) * speed;
+            if (Math.abs(expected - video.currentTime) > 0.18) startCodecAudio(video.currentTime);
+          }
+          handlers.current.onTime(el);
+          break;
         case "loadedmetadata":
         case "durationchange": handlers.current.onMeta(el); break;
-        case "ended": handlers.current.onEnded(); break;
+        case "ended":
+          if (el === video) stopCodecAudio();
+          handlers.current.onEnded();
+          break;
         case "error": handlers.current.onError(); break;
       }
     };
     for (const el of [audio, video]) for (const type of MEDIA_EVENTS) el.addEventListener(type, onEvent);
     return () => { for (const el of [audio, video]) for (const type of MEDIA_EVENTS) el.removeEventListener(type, onEvent); };
+  }, []);
+
+  useEffect(() => () => {
+    window.clearTimeout(videoAudioProbeTimer.current);
+    stopCodecAudio();
   }, []);
 
   useEffect(() => {
@@ -901,6 +1007,9 @@ export function Player() {
       setDuration(0);
       return;
     }
+    stopCodecAudio();
+    window.clearTimeout(videoAudioProbeTimer.current);
+    video.muted = false;
     const watched = videoProgress[current.id];
     if (current.kind === "video" && resumePosition && pendingSeek.current == null && watched > 5 && (!current.duration || watched < current.duration - 5)) {
       pendingSeek.current = watched;
@@ -924,10 +1033,14 @@ export function Player() {
       el.playbackRate = speed;
       el.preservesPitch = preservePitch;
     }
+    const state = codecAudioRef.current;
+    if (state?.source) state.source.playbackRate.value = speed;
   }, [speed, preservePitch]);
 
   useEffect(() => {
     for (const el of [audioRef.current, videoRef.current]) if (el) el.volume = muted ? 0 : Math.max(0, Math.min(1, volume * sleepFade));
+    const state = codecAudioRef.current;
+    if (state) state.gain.gain.value = muted ? 0 : Math.max(0, Math.min(1, volume * sleepFade));
   }, [volume, muted, sleepFade]);
 
   useEffect(() => {
