@@ -685,28 +685,34 @@ export function Player() {
     },
     removeFromLibrary,
     clearLibrary() {
-      clearQueue();
-      revokeTranscoded();
-      setTracks((old) => {
-        for (const t of old) {
-          URL.revokeObjectURL(t.url);
-          if (t.cover) URL.revokeObjectURL(t.cover);
+      void (async () => {
+        try {
+          await clearStoredLibrary();
+        } catch {
+          toast("Couldn't clear local storage");
+          return;
         }
-        return [];
-      });
-      setComics((old) => {
-        for (const c of old) if (c.cover) URL.revokeObjectURL(c.cover);
-        return [];
-      });
-      void deleteComics(comics.map((c) => c.id)).catch(() => toast("Couldn't clear local books and comics"));
-      setPlaylists((p) => p.map((pl) => ({ ...pl, trackIds: [] })));
-      setFavoritesList([]);
-      setPlays({});
-      setLastPlayed({});
-      setVideoProgress({});
-      setRoutes([{ view: "home" }]);
-      void clearStoredLibrary().catch(() => toast("Couldn't clear local storage"));
-      toast("Library cleared");
+        clearQueue();
+        revokeTranscoded();
+        setTracks((old) => {
+          for (const t of old) {
+            URL.revokeObjectURL(t.url);
+            if (t.cover) URL.revokeObjectURL(t.cover);
+          }
+          return [];
+        });
+        setComics((old) => {
+          for (const c of old) if (c.cover) URL.revokeObjectURL(c.cover);
+          return [];
+        });
+        setPlaylists((p) => p.map((pl) => ({ ...pl, trackIds: [] })));
+        setFavoritesList([]);
+        setPlays({});
+        setLastPlayed({});
+        setVideoProgress({});
+        setRoutes([{ view: "home" }]);
+        toast("Library cleared");
+      })();
     },
     importFolder: () => void importFolder(),
     importFiles: () => fileInput.current?.click(),
