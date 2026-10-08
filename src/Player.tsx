@@ -878,7 +878,7 @@ export function Player() {
       const code = el.error?.code;
       if (current.kind === "video" && (code === MediaError.MEDIA_ERR_DECODE || code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) && !codecFallbackAttempted.current.has(current.id)) {
         void activateCodecAudio(current, el).then((ok) => {
-          if (!ok && current?.id === el.getAttribute("data-mortimer-id")) {
+          if (!ok) {
             wantPlay.current = false;
             setPlaying(false);
             toast("This video audio codec could not be decoded");
