@@ -1,4 +1,4 @@
-const CACHE = "six-shell-v6";
+const CACHE = "six-shell-v7";
 const SHELL = [
   "/Mortimer-player/",
   "/Mortimer-player/manifest.webmanifest",
@@ -34,17 +34,22 @@ self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
 
+  const sameOrigin = new URL(request.url).origin === self.location.origin;
+  const staticAsset = ["script", "style", "font", "image", "manifest", "worker"].includes(request.destination);
+
+  const cacheResponse = (response) => {
+    if (sameOrigin && response.ok && response.type === "basic") {
+      const copy = response.clone();
+      void caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
+    }
+    return response;
+  };
+
   event.respondWith(
-    fetch(request).then((response) => {
-      if (response.ok && response.type === "basic" && new URL(request.url).origin === self.location.origin) {
-        const copy = response.clone();
-        void caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
-      }
-      return response;
-    }).catch(() =>
-      caches.match(request).then((cached) =>
-        cached || caches.match("/Mortimer-player/")
-      )
-    )
+    staticAsset
+      ? caches.match(request).then((cached) => cached || fetch(request).then(cacheResponse))
+      : fetch(request).then(cacheResponse).catch(() =>
+          caches.match(request).then((cached) => cached || caches.match("/Mortimer-player/"))
+        )
   );
 });
