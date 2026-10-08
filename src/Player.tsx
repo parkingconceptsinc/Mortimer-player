@@ -446,7 +446,7 @@ export function Player() {
         if (item.kind !== "audio") continue;
         enqueueMetadata(async () => {
           const tags = await readTags(item.file, item.name);
-          if (libraryStorageOk) await patchTrack(item.id, tags).catch(() => {});
+          if (libraryStorageOk) await patchTrack(item.id, { ...tags, metaVersion: META_VERSION }).catch(() => {});
           setTracks((old) => {
             const live = old.find((track) => track.id === item.id);
             if (!live) return old;
@@ -1282,19 +1282,23 @@ export function Player() {
           const patch = Object.fromEntries(Object.entries({ ...tags, metaVersion: META_VERSION }).filter(([, v]) => v !== undefined));
           await patchTrack(track.id, patch).catch(() => {});
           const cover = tags.cover ? URL.createObjectURL(tags.cover) : undefined;
-          setTracks((old) => old.map((t) => (t.id !== track.id ? t : {
-            ...t,
-            title: tags.title || t.title,
-            artist: tags.artist ?? t.artist,
-            album: tags.album ?? t.album,
-            albumArtist: tags.albumArtist ?? t.albumArtist,
-            genre: tags.genre ?? t.genre,
-            year: tags.year ?? t.year,
-            trackNo: tags.trackNo ?? t.trackNo,
-            duration: tags.duration ?? t.duration,
-            cover: cover ?? t.cover,
-            metaVersion: META_VERSION,
-          })));
+          setTracks((old) => old.map((t) => {
+            if (t.id !== track.id) return t;
+            if (cover && t.cover) URL.revokeObjectURL(t.cover);
+            return {
+              ...t,
+              title: tags.title || t.title,
+              artist: tags.artist ?? t.artist,
+              album: tags.album ?? t.album,
+              albumArtist: tags.albumArtist ?? t.albumArtist,
+              genre: tags.genre ?? t.genre,
+              year: tags.year ?? t.year,
+              trackNo: tags.trackNo ?? t.trackNo,
+              duration: tags.duration ?? t.duration,
+              cover: cover ?? t.cover,
+              metaVersion: META_VERSION,
+            };
+          }));
           if (tags.artist || tags.album || tags.cover) improved++;
         } catch {}
       }

@@ -46,7 +46,9 @@ export async function readItem({ file, path }: Incoming, addedAt: number): Promi
     file,
     title: stripExt(file.name),
     addedAt,
-    metaVersion: META_VERSION,
+    // Audio metadata is enriched after the file is persisted. Keep it stale
+    // until that pass completes so an interrupted import is retried next time.
+    metaVersion: kind === "audio" ? 0 : META_VERSION,
   };
   if (kind !== "audio") return item;
 
