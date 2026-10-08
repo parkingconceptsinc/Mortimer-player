@@ -261,6 +261,21 @@ export function Player() {
         try { await saveLibrary(items); } catch { libraryStorageOk = false; }
       }
       setTracks((old) => [...old, ...items.map(toTrack)]);
+
+      // Enrich audio metadata in the background. This must not delay adding
+      // the actual file to the library.
+      for (const item of items) {
+        if (item.kind !== "audio") continue;
+        void readTags(item.file, item.name).then((tags) => {
+          if (libraryStorageOk) void patchTrack(item.id, tags).catch(() => {});
+          setTracks((old) => old.map((track) => {
+            if (track.id !== item.id) return track;
+            const cover = tags.cover ? URL.createObjectURL(tags.cover) : track.cover;
+            if (tags.cover && track.cover) URL.revokeObjectURL(track.cover);
+            return { ...track, ...tags, cover };
+          }));
+        }).catch(() => {});
+      }
     };
     for (let i = 0; i < fresh.length; i++) {
       batch.push(await readItem(fresh[i], addedAt + i));
