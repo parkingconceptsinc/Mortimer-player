@@ -53,7 +53,9 @@ export async function decodeAudioTrack(source: Blob): Promise<DecodedAudio> {
       const data = await engine.readFile(output);
       const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
       if (!bytes.byteLength || bytes.byteLength % 8 !== 0) throw new Error("Decoded audio is empty");
-      const interleaved = new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+      const pcmBytes = new Uint8Array(bytes.byteLength);
+      pcmBytes.set(bytes);
+      const interleaved = new Float32Array(pcmBytes.buffer);
       const frames = interleaved.length / 2;
       const Ctor = window.AudioContext ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!Ctor) throw new Error("Web Audio is unavailable");
