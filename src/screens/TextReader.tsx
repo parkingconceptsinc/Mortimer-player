@@ -42,8 +42,9 @@ async function readDocument(file: Blob, format: string) {
 }
 
 export function TextReader() {
-  const { comics, readerId, actions } = usePlayer();
+  const { comics, readerId, actions, comicProgress } = usePlayer();
   const book = comics.find((c) => c.id === readerId);
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -73,9 +74,16 @@ export function TextReader() {
   }, [book?.id]);
 
   useEffect(() => {
-    if (!book || !bodyRef.current) return;
-    bodyRef.current.scrollTop = 0;
-  }, [book?.id]);
+    if (!book || !ready || !bodyRef.current) return;
+    const saved = comicProgress[book.id];
+    const root = bodyRef.current;
+    const apply = () => {
+      const max = Math.max(0, root.scrollHeight - root.clientHeight);
+      const fraction = saved && saved.pages > 1 ? Math.max(0, Math.min(1, saved.page / 998)) : 0;
+      root.scrollTop = max * fraction;
+    };
+    requestAnimationFrame(apply);
+  }, [book?.id, ready, comicProgress]);
 
   useEffect(() => {
     if (!book) return;
@@ -107,7 +115,7 @@ export function TextReader() {
   }, [book?.id]);
 
   const toggleFullscreen = () => {
-    const host = bodyRef.current?.parentElement;
+    const host = rootRef.current;
     if (!host) return;
     if (globalThis.document.fullscreenElement) void globalThis.document.exitFullscreen().catch(() => {});
     else void host.requestFullscreen?.().catch(() => {});
@@ -117,7 +125,7 @@ export function TextReader() {
   const html = book.format === "html" || book.format === "htm";
 
   return (
-    <div className="reader textReader" role="dialog" aria-label={book.title}>
+    <div ref={rootRef} className="reader textReader" role="dialog" aria-label={book.title}>
       <div className={"rdChrome" + (ui ? "" : " hidden")}>
         <div className="rdTop" role="toolbar" aria-label="Document controls">
           <button className="iconBtn" aria-label="Close document" onClick={() => actions.closeComic()}><X size={24} /></button>
