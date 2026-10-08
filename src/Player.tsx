@@ -496,11 +496,11 @@ export function Player() {
     const storageNote = libraryStorageOk && comicStorageOk ? "" : ", but some items couldn't be saved for next time";
     toast(`${what}${failureNote}${storageNote}`);
   }
-  function importEntries(entries: Incoming[], label?: string) {
+  function importEntries(entries: Incoming[], label?: string): Promise<void> {
     mediaImportQueue = mediaImportQueue
       .catch(() => {})
       .then(() => performImportEntries(entries, label));
-    void mediaImportQueue;
+    return mediaImportQueue;
   }
 
   async function importFolder() {
