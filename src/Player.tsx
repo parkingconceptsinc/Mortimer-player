@@ -217,10 +217,21 @@ export function Player() {
       gain.connect(decoded.context.destination);
       codecAudioRef.current = { ...decoded, id: item.id, source: null, gain, startedAt: decoded.context.currentTime, offset: el.currentTime };
       el.muted = true;
-      if (el.error && el.getAttribute("src")) {
-        el.load();
-        if (wantPlay.current) startPlayback(el);
-      } else if (!el.paused) startCodecAudio(el.currentTime);
+      // Keep the original video stream; only replace the unsupported audio path.
+      // Muting first lets the browser continue the video when its audio decoder
+      // is the part that failed.
+      if (el.error && el.getAttribute("src")) el.load();
+      if (wantPlay.current) {
+        try {
+          await el.play();
+        } catch {
+          // A video codec failure cannot be fixed by an audio-only decoder.
+          return false;
+        }
+        startCodecAudio(el.currentTime);
+      } else if (!el.paused) {
+        startCodecAudio(el.currentTime);
+      }
       toast("Using the original video audio codec");
       return true;
     } catch {
