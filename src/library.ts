@@ -110,7 +110,19 @@ export async function patchTrack(id: string, patch: Partial<Omit<StoredLibraryIt
 }
 
 export async function clearLibrary() {
-  await withStore("readwrite", (store) => store.clear());
+  const db = await openDB();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction([STORE, COMICS], "readwrite");
+      tx.objectStore(STORE).clear();
+      tx.objectStore(COMICS).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error ?? new Error("IndexedDB transaction aborted"));
+    });
+  } finally {
+    db.close();
+  }
 }
 
 export async function saveComics(items: StoredComic[]) {
