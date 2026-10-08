@@ -2,8 +2,18 @@ import type { Comic, ComicFormat, Shelf } from "./types";
 import type { StoredComic } from "./library";
 import { folderOf, stripExt } from "./util";
 
-export const isComicFile = (name: string) => /\.(cbz|cbr|pdf|epub)$/i.test(name);
-export const comicFormatOf = (name: string): ComicFormat => (/\.cbr$/i.test(name) ? "cbr" : /\.pdf$/i.test(name) ? "pdf" : /\.epub$/i.test(name) ? "epub" : "cbz");
+export const TEXT_BOOK_EXT = /\.(txt|md|markdown|log|nfo|csv|tsv|json|xml|yaml|yml|toml|ini|cfg|conf|srt|vtt|ass|ssa|sub|html|htm|rtf|docx|odt)$/i;
+export const isTextBookFile = (name: string) => TEXT_BOOK_EXT.test(name);
+export const isComicFile = (name: string) => /\.(cbz|cbr|pdf|epub)$/i.test(name) || isTextBookFile(name);
+export const comicFormatOf = (name: string): ComicFormat => {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "cbr") return "cbr";
+  if (ext === "pdf") return "pdf";
+  if (ext === "epub") return "epub";
+  if (ext === "cbz") return "cbz";
+  return ext as ComicFormat;
+};
+export const isTextFormat = (format: ComicFormat) => !["cbz", "cbr", "pdf", "epub"].includes(format);
 export const defaultShelf = (format: ComicFormat): Shelf => (format === "cbz" || format === "cbr" ? "comics" : "books");
 export const comicTitle = (name: string) => stripExt(name).replace(/_+/g, " ").replace(/\s+/g, " ").trim();
 
