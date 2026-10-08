@@ -1068,20 +1068,40 @@ export function Player() {
       if (cancelled) return;
       const uniqueStored = new Map<string, StoredLibraryItem>();
       const duplicateIds: string[] = [];
+      const repaired: StoredLibraryItem[] = [];
       for (const item of stored) {
         const key = trackKey(item.path, item.size, item.lastModified);
         const previous = uniqueStored.get(key);
-        if (previous) {
-          duplicateIds.push(item.id);
-          if ((item.addedAt ?? 0) < (previous.addedAt ?? 0)) {
-            duplicateIds[duplicateIds.length - 1] = previous.id;
-            uniqueStored.set(key, item);
-          }
-        } else {
+        if (!previous) {
           uniqueStored.set(key, item);
+          continue;
         }
+        const keep = (item.addedAt ?? 0) < (previous.addedAt ?? 0) ? item : previous;
+        const drop = keep.id === item.id ? previous : item;
+        const merged: StoredLibraryItem = {
+          ...keep,
+          title: keep.title || drop.title,
+          artist: keep.artist || drop.artist,
+          album: keep.album || drop.album,
+          albumArtist: keep.albumArtist || drop.albumArtist,
+          genre: keep.genre || drop.genre,
+          year: keep.year ?? drop.year,
+          trackNo: keep.trackNo ?? drop.trackNo,
+          duration: keep.duration ?? drop.duration,
+          metaVersion: Math.max(keep.metaVersion ?? 0, drop.metaVersion ?? 0),
+          cover: keep.cover ?? drop.cover,
+        };
+        uniqueStored.set(key, merged);
+        duplicateIds.push(drop.id);
+        if (merged.cover !== keep.cover || merged.metaVersion !== keep.metaVersion || merged.title !== keep.title ||
+            merged.artist !== keep.artist || merged.album !== keep.album || merged.albumArtist !== keep.albumArtist ||
+            merged.genre !== keep.genre || merged.year !== keep.year || merged.trackNo !== keep.trackNo || merged.duration !== keep.duration) repaired.push(merged);
       }
       if (duplicateIds.length) void deleteTracks(duplicateIds).catch(() => {});
+      if (repaired.length) void Promise.all(repaired.map((item) => {
+        const { id, ...patch } = item;
+        return patchTrack(id, patch).catch(() => {});
+      }));
       const restored = [...uniqueStored.values()].map(toTrack).sort((a, b) => a.addedAt - b.addedAt);
       const ids = new Set(restored.map((t) => t.id));
       const savedQueue = readPref<string[]>("queue", []);
@@ -1100,20 +1120,35 @@ export function Player() {
     const restoreBooks = loadComics().then((stored) => {
       const uniqueStored = new Map<string, StoredComic>();
       const duplicateIds: string[] = [];
+      const repaired: StoredComic[] = [];
       for (const item of stored) {
         const key = trackKey(item.path, item.size, item.lastModified);
         const previous = uniqueStored.get(key);
-        if (previous) {
-          duplicateIds.push(item.id);
-          if (item.addedAt < previous.addedAt) {
-            duplicateIds[duplicateIds.length - 1] = previous.id;
-            uniqueStored.set(key, item);
-          }
-        } else {
+        if (!previous) {
           uniqueStored.set(key, item);
+          continue;
         }
+        const keep = item.addedAt < previous.addedAt ? item : previous;
+        const drop = keep.id === item.id ? previous : item;
+        const merged: StoredComic = {
+          ...keep,
+          title: keep.title || drop.title,
+          author: keep.author || drop.author,
+          pages: keep.pages ?? drop.pages,
+          shelf: keep.shelf ?? drop.shelf,
+          locations: keep.locations ?? drop.locations,
+          cover: keep.cover ?? drop.cover,
+        };
+        uniqueStored.set(key, merged);
+        duplicateIds.push(drop.id);
+        if (merged.cover !== keep.cover || merged.title !== keep.title || merged.author !== keep.author ||
+            merged.pages !== keep.pages || merged.shelf !== keep.shelf || merged.locations !== keep.locations) repaired.push(merged);
       }
       if (duplicateIds.length) void deleteComics(duplicateIds).catch(() => {});
+      if (repaired.length) void Promise.all(repaired.map((item) => {
+        const { id, ...patch } = item;
+        return patchComic(id, patch).catch(() => {});
+      }));
       if (!cancelled) setComics([...uniqueStored.values()].map(toComic).sort((a, b) => a.addedAt - b.addedAt));
     }).catch(() => {
       if (!cancelled) toast("Local books and comics storage is unavailable in this browser");

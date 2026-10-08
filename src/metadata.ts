@@ -15,9 +15,8 @@ export type Tags = Pick<StoredLibraryItem, "title" | "artist" | "album" | "album
 export async function readTags(file: Blob, name: string): Promise<Tags> {
   const tags: Tags = { title: stripExt(name) };
   const parseBlob = await loadParser();
-  if (!parseBlob) return tags;
-  try {
-    const { common, format } = await parseBlob(file);
+  if (!parseBlob) throw new Error("Metadata parser unavailable");
+  const { common, format } = await parseBlob(file);
     tags.title = common.title || tags.title;
     tags.artist = common.artist || common.artists?.[0] || "";
     tags.album = common.album || "";
@@ -26,9 +25,8 @@ export async function readTags(file: Blob, name: string): Promise<Tags> {
     tags.year = common.year || undefined;
     tags.trackNo = common.track?.no ?? undefined;
     tags.duration = format.duration && Number.isFinite(format.duration) ? format.duration : undefined;
-    const picture = common.picture?.[0];
-    if (picture) tags.cover = new Blob([new Uint8Array(picture.data)], { type: picture.format });
-  } catch {}
+  const picture = common.picture?.[0];
+  if (picture) tags.cover = new Blob([new Uint8Array(picture.data)], { type: picture.format });
   return tags;
 }
 
