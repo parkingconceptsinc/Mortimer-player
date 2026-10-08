@@ -2,8 +2,8 @@ import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
 // The FFmpeg core is shipped by @ffmpeg/core and bundled by Vite.
 // No CDN or network request is required for decoding after installation.
-import coreURL from "@ffmpeg/core/dist/esm/ffmpeg-core.js?url";
-import wasmURL from "@ffmpeg/core/dist/esm/ffmpeg-core.wasm?url";
+import coreURL from "@ffmpeg/core?url";
+import wasmURL from "@ffmpeg/core/wasm?url";
 
 let ffmpeg: FFmpeg | null = null;
 let loading: Promise<FFmpeg> | null = null;
