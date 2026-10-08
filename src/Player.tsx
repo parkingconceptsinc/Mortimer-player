@@ -725,6 +725,10 @@ export function Player() {
         setPlays({});
         setLastPlayed({});
         setVideoProgress({});
+        setComicProgress({});
+        writePref("resume", null);
+        setSleepState({ endsAt: null, endOfTrack: false });
+        setAb({ a: null, b: null });
         setRoutes([{ view: "home" }]);
         toast("Library cleared");
       })();
