@@ -46,6 +46,7 @@ const MEDIA_EVENTS = ["play", "pause", "timeupdate", "loadedmetadata", "duration
 type CodecAudioState = DecodedAudio & { id: string; source: AudioBufferSourceNode | null; gain: GainNode; startedAt: number; offset: number };
 
 const metadataQueue: Array<() => Promise<void>> = [];
+let mediaImportQueue: Promise<void> = Promise.resolve();
 let metadataPump: Promise<void> | null = null;
 
 function startMetadataPump() {
@@ -327,7 +328,7 @@ export function Player() {
     setOriginalQueue(null);
   }
 
-  async function importEntries(entries: Incoming[], label?: string) {
+  async function performImportEntries(entries: Incoming[], label?: string) {
     const seen = new Set([...tracks, ...comics].map((t) => trackKey(t.path, t.size, t.lastModified)));
     const isNew = ({ file, path }: Incoming) => {
       const key = trackKey(path, file.size, file.lastModified);
@@ -433,6 +434,13 @@ export function Player() {
     const storageNote = libraryStorageOk && comicStorageOk ? "" : ", but some items couldn't be saved for next time";
     toast(`${what}${failureNote}${storageNote}`);
   }
+  function importEntries(entries: Incoming[], label?: string) {
+    mediaImportQueue = mediaImportQueue
+      .catch(() => {})
+      .then(() => performImportEntries(entries, label));
+    void mediaImportQueue;
+  }
+
   async function importFolder() {
     const pickerHost = window as Window & { showDirectoryPicker?: (options?: { mode?: "read" }) => Promise<DirectoryHandleLike> };
     if (!pickerHost.showDirectoryPicker) {
