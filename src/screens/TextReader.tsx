@@ -15,8 +15,7 @@ function rtfToText(value: string) {
     .replace(/\\\\/g, "\\")
     .replace(/\\~/g, " ")
     .replace(/\\-/g, "")
-    .replace(/\\
-/g, "");
+    ;
 }
 
 function xmlToText(xml: string) {
@@ -105,7 +104,7 @@ export function TextReader() {
     if (!book) return;
     const id = window.setTimeout(() => setUi(false), 2600);
     return () => window.clearTimeout(id);
-  }, [document?.id]);
+  }, [book?.id]);
 
   const toggleFullscreen = () => {
     const host = bodyRef.current?.parentElement;
