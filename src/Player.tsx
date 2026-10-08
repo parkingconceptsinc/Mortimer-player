@@ -877,7 +877,6 @@ export function Player() {
     const audio = audioRef.current;
     const video = videoRef.current;
     if (!audio || !video) return;
-    window.clearTimeout(videoAudioProbeTimer.current);
     const el = current?.kind === "video" ? video : audio;
     const other = el === audio ? video : audio;
     mediaRef.current = el;
