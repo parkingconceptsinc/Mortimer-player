@@ -49,6 +49,7 @@ export function ComicReader() {
   const tapTimer = useRef<number | undefined>(undefined);
   const lastWheel = useRef(0);
   const thumbs = useRef(new Map<number, string>());
+  const sourceRef = useRef<ComicSource | null>(null);
   const scrolledInitially = useRef(false);
   pageRef.current = page;
 
@@ -85,12 +86,14 @@ export function ComicReader() {
       .then((src) => {
         if (cancelled) return src.close();
         opened = src;
+        sourceRef.current = src;
         setSource(src);
         setPage((p) => (p >= src.pages ? 0 : p));
       })
       .catch((e: Error) => { if (!cancelled) setError(e.message || "Couldn't open this comic."); });
     return () => {
       cancelled = true;
+      if (sourceRef.current === opened) sourceRef.current = null;
       opened?.close();
     };
   }, [comic?.id]);
@@ -102,7 +105,6 @@ export function ComicReader() {
 
   useEffect(() => {
     if (!source) return;
-    let cancelled = false;
     const ahead = vertical ? 4 : s.mode === "double" ? 5 : 3;
     const wanted: number[] = [];
     for (let i = page - 2; i <= page + ahead; i++) if (i >= 0 && i < source.pages) wanted.push(i);
@@ -112,7 +114,7 @@ export function ComicReader() {
       loading.current.add(i);
       source.getPage(i).then((blob) => {
         loading.current.delete(i);
-        if (cancelled) return;
+        if (sourceRef.current !== source) return;
         const url = URL.createObjectURL(blob);
         const next = new Map(urlsRef.current);
         next.set(i, url);
@@ -126,12 +128,9 @@ export function ComicReader() {
         setUrls(next);
       }).catch(() => {
         loading.current.delete(i);
-        if (!cancelled) setFailed((f) => new Set(f).add(i));
+        if (sourceRef.current === source) setFailed((f) => new Set(f).add(i));
       });
     }
-    return () => {
-      cancelled = true;
-    };
   }, [source, page, s.mode, vertical]);
 
   useEffect(() => {
