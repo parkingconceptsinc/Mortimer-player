@@ -320,7 +320,10 @@ export function Player() {
         for await (const entry of dir.values()) {
           const path = `${prefix}/${entry.name}`;
           if (entry.kind === "file") {
-            if ((supported(entry.name) || isComicFile(entry.name)) && entry.getFile) found.push({ file: await entry.getFile(), path });
+            if ((supported(entry.name) || isComicFile(entry.name)) && entry.getFile) {
+              found.push({ file: await entry.getFile(), path });
+              setImporting({ done: found.length, total: 0, label: "Scanning" });
+            }
           } else if (!entry.name.startsWith(".")) {
             await walk(entry as DirectoryHandleLike, path);
           }
@@ -1144,7 +1147,7 @@ export function Player() {
           {menu && <TrackMenu target={menu} onClose={() => actions.back()} />}
           {importing && (
             <div className="importBar" role="status">
-              <span>{importing.total ? `${importing.label ?? "Importing"} ${importing.done} of ${importing.total}…` : "Scanning folder…"}</span>
+              <span>{importing.total ? `${importing.label ?? "Importing"} ${importing.done} of ${importing.total}…` : `Scanning folder… ${importing.done} files found`}</span>
               <i style={{ width: importing.total ? `${(importing.done / importing.total) * 100}%` : "15%" }} />
             </div>
           )}
