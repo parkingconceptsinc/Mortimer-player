@@ -33,7 +33,7 @@ async function readDocument(file: Blob, format: string) {
   if (format === "html" || format === "htm") return "";
   if (format === "docx" || format === "odt") {
     const archive = unzipSync(new Uint8Array(await file.arrayBuffer()));
-    const target = format === "docx" ? "word/document.xml" : "content.xml";
+    const target = format === "docx" ? "word/book.xml" : "content.xml";
     const data = archive[target];
     if (!data) throw new Error("The document content could not be found.");
     return xmlToText(new TextDecoder().decode(data));
@@ -44,7 +44,7 @@ async function readDocument(file: Blob, format: string) {
 
 export function TextReader() {
   const { comics, readerId, actions } = usePlayer();
-  const document = comics.find((c) => c.id === readerId);
+  const book = comics.find((c) => c.id === readerId);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -52,34 +52,34 @@ export function TextReader() {
   const [ui, setUi] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
   const url = useMemo(() => {
-    if (!document || !/\\.(html|htm)$/i.test(document.name)) return null;
-    return URL.createObjectURL(document.file);
+    if (!book || !/\\.(html|htm)$/i.test(book.name)) return null;
+    return URL.createObjectURL(book.file);
   }, [document?.id]);
 
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
 
   useEffect(() => {
-    if (!document) return;
+    if (!book) return;
     let cancelled = false;
     setReady(false);
     setError(null);
-    void readDocument(document.file, document.format).then((value) => {
+    void readDocument(book.file, book.format).then((value) => {
       if (cancelled) return;
       setText(value);
       setReady(true);
     }).catch((e: Error) => {
-      if (!cancelled) setError(e.message || "Couldn't open this document.");
+      if (!cancelled) setError(e.message || "Couldn't open this book.");
     });
     return () => { cancelled = true; };
   }, [document?.id]);
 
   useEffect(() => {
-    if (!document || !bodyRef.current) return;
+    if (!book || !bodyRef.current) return;
     bodyRef.current.scrollTop = 0;
   }, [document?.id]);
 
   useEffect(() => {
-    if (!document) return;
+    if (!book) return;
     const root = bodyRef.current;
     if (!root) return;
     let last = 0;
@@ -88,21 +88,21 @@ export function TextReader() {
       const pct = max > 0 ? root.scrollTop / max : 1;
       if (Date.now() - last < 1500) return;
       last = Date.now();
-      actions.setComicProgress(document.id, { page: Math.round(pct * 998), pages: 999, at: Date.now() });
+      actions.setComicProgress(book.id, { page: Math.round(pct * 998), pages: 999, at: Date.now() });
     };
     root.addEventListener("scroll", onScroll, { passive: true });
     return () => root.removeEventListener("scroll", onScroll);
   }, [document?.id, actions, ready]);
 
   useEffect(() => {
-    if (!document) return;
-    const onChange = () => setFullscreen(!!document.fullscreenElement);
-    document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
+    if (!book) return;
+    const onChange = () => setFullscreen(!!book.fullscreenElement);
+    book.addEventListener("fullscreenchange", onChange);
+    return () => book.removeEventListener("fullscreenchange", onChange);
   }, [document]);
 
   useEffect(() => {
-    if (!document) return;
+    if (!book) return;
     const id = window.setTimeout(() => setUi(false), 2600);
     return () => window.clearTimeout(id);
   }, [document?.id]);
@@ -111,21 +111,21 @@ export function TextReader() {
     const root = document?.body;
     if (!root) return;
     const host = bodyRef.current?.parentElement;
-    if (globalThis.document.fullscreenElement) void globalThis.document.exitFullscreen().catch(() => {});
+    if (globalThis.book.fullscreenElement) void globalThis.book.exitFullscreen().catch(() => {});
     else void host?.requestFullscreen?.().catch(() => {});
   };
 
-  if (!document) return null;
-  const html = /\\.(html|htm)$/i.test(document.name);
+  if (!book) return null;
+  const html = /\\.(html|htm)$/i.test(book.name);
 
   return (
-    <div className="reader textReader" role="dialog" aria-label={document.title}>
+    <div className="reader textReader" role="dialog" aria-label={book.title}>
       <div className={"rdChrome" + (ui ? "" : " hidden")}>
         <div className="rdTop" role="toolbar" aria-label="Document controls">
           <button className="iconBtn" aria-label="Close document" onClick={() => actions.closeComic()}><X size={24} /></button>
           <div className="rdTitle">
-            <b>{document.title}</b>
-            <small>{document.format.toUpperCase()} · {formatSize(document.size)}</small>
+            <b>{book.title}</b>
+            <small>{book.format.toUpperCase()} · {formatSize(book.size)}</small>
           </div>
           <button className="iconBtn" aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"} onClick={toggleFullscreen}>
             {fullscreen ? <Minimize size={21} /> : <Maximize size={21} />}
@@ -134,7 +134,7 @@ export function TextReader() {
       </div>
 
       {!ready && !error && (
-        <div className="rdMessage"><LoaderCircle className="spin" size={34} /><p>Opening {document.title}…</p></div>
+        <div className="rdMessage"><LoaderCircle className="spin" size={34} /><p>Opening {book.title}…</p></div>
       )}
       {error && (
         <div className="rdMessage">
@@ -146,7 +146,7 @@ export function TextReader() {
         <iframe
           className="textHtml"
           src={url}
-          title={document.title}
+          title={book.title}
           sandbox=""
           style={{ border: 0, width: "100%", height: "100%" } as CSSProperties}
         />
@@ -154,7 +154,7 @@ export function TextReader() {
       {ready && !html && (
         <div ref={bodyRef} className="textBody" onPointerDown={() => { setUi(true); }}>
           <article className="textPaper">
-            <div className="textHeading"><FileText size={20} /><span>{document.title}</span></div>
+            <div className="textHeading"><FileText size={20} /><span>{book.title}</span></div>
             <pre>{text}</pre>
           </article>
         </div>
