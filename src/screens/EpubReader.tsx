@@ -55,7 +55,7 @@ export function EpubReader() {
   const [sheet, setSheet] = useState<null | "toc" | "settings">(null);
   const [showEnd, setShowEnd] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
-  const theme = THEMES[settings.theme];
+  const theme = THEMES[settings.theme] ?? THEMES.dark;
 
   const nextBook = useMemo(() => {
     if (!comic) return undefined;
@@ -357,10 +357,14 @@ export function EpubReader() {
 }
 
 function applyLook(rendition: Rendition, s: BookSettings) {
-  rendition.themes.select(s.theme);
-  rendition.themes.fontSize(`${s.fontSize}%`);
-  rendition.themes.override("line-height", String(s.lineHeight), true);
-  if (FONTS[s.font]) rendition.themes.override("font-family", FONTS[s.font], true);
+  const theme = THEMES[s.theme] ? s.theme : DEFAULT_SETTINGS.theme;
+  const fontSize = Number.isFinite(s.fontSize) ? Math.max(70, Math.min(220, s.fontSize)) : DEFAULT_SETTINGS.fontSize;
+  const lineHeight = Number.isFinite(s.lineHeight) ? Math.max(1.1, Math.min(2.4, s.lineHeight)) : DEFAULT_SETTINGS.lineHeight;
+  const font = FONTS[s.font] ? s.font : DEFAULT_SETTINGS.font;
+  rendition.themes.select(theme);
+  rendition.themes.fontSize(`${fontSize}%`);
+  rendition.themes.override("line-height", String(lineHeight), true);
+  if (FONTS[font]) rendition.themes.override("font-family", FONTS[font], true);
   else rendition.themes.override("font-family", "inherit");
 }
 
