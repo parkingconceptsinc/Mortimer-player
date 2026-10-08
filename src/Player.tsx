@@ -308,13 +308,15 @@ export function Player() {
   }
 
   async function importFolder() {
-    const picker = (window as Window & { showDirectoryPicker?: (options?: { mode?: "read" }) => Promise<DirectoryHandleLike> }).showDirectoryPicker;
-    if (!picker) {
+    const pickerHost = window as Window & { showDirectoryPicker?: (options?: { mode?: "read" }) => Promise<DirectoryHandleLike> };
+    if (!pickerHost.showDirectoryPicker) {
       folderInput.current?.click();
       return;
     }
     try {
-      const directory = await picker({ mode: "read" });
+      // Keep the native method bound to window. Calling the detached method can
+      // fail with "Illegal invocation" in browsers that require its receiver.
+      const directory = await pickerHost.showDirectoryPicker({ mode: "read" });
       const found: Incoming[] = [];
       const pending: Array<{ file: () => Promise<File>; path: string }> = [];
 
