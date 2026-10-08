@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type InputHTMLAttributes } from "react";
-import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { fetchFile, toBlobURL } from "@ffmpeg/util";
 import { BookOpen, Clapperboard, Disc3, Download, FilePlus, FolderOpen, Library as LibraryIcon, ListMusic, Settings as SettingsIcon, SlidersHorizontal, type LucideIcon } from "lucide-react";
 import { applyAudio, attachElement, EQ_PRESETS, initEngine, resumeEngine } from "./audioEngine";
 import { PlayerContext, ProgressContext, type Actions, type MenuTarget, type PlayerState, type SleepState } from "./context";
@@ -44,34 +42,6 @@ type DirectoryEntry = { kind: "file" | "directory"; name: string; getFile?: () =
 type DirectoryHandleLike = { name: string; values: () => AsyncIterable<DirectoryEntry> };
 
 const MEDIA_EVENTS = ["play", "pause", "timeupdate", "loadedmetadata", "durationchange", "ended", "error"] as const;
-
-// Browser HEVC/AC-3/DTS support varies by platform. When native playback fails,
-// use a local FFmpeg WASM fallback to produce H.264/AAC MP4 entirely in-browser.
-const ffmpeg = new FFmpeg();
-let ffmpegLoad: Promise<void> | null = null;
-const transcodedUrls = new Map<string, string>();
-const transcoding = new Set<string>();
-
-function revokeTranscoded(ids?: Iterable<string>) {
-  if (!ids) {
-    for (const url of transcodedUrls.values()) URL.revokeObjectURL(url);
-    transcodedUrls.clear();
-    return;
-  }
-  for (const id of ids) {
-    const url = transcodedUrls.get(id);
-    if (!url) continue;
-    URL.revokeObjectURL(url);
-    transcodedUrls.delete(id);
-  }
-}
-let ffmpegQueue: Promise<unknown> = Promise.resolve();
-
-function enqueueFfmpeg<T>(task: () => Promise<T>) {
-  const next = ffmpegQueue.then(task, task);
-  ffmpegQueue = next.then(() => undefined, () => undefined);
-  return next;
-}
 
 const metadataQueue: Array<() => Promise<void>> = [];
 let metadataPump: Promise<void> | null = null;
@@ -189,7 +159,6 @@ export function Player() {
   const returnScreen = useRef<Screen>("library");
   const currentRef = useRef<Track | undefined>(undefined);
   const loadedTrack = useRef<{ id: string; kind: Track["kind"] } | null>(null);
-  const videoAudioProbeTimer = useRef<number | undefined>(undefined);
 
   const [loaded, setLoaded] = useState(false);
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -276,7 +245,7 @@ export function Player() {
     resumeEngine();
     wantPlay.current = true;
     void el.play().catch((error: DOMException) => {
-      // Load failures surface through the element's "error" event, which handles skipping.
+      // Load failures surface through the element's "error" event.
       if (error?.name === "AbortError" || error?.name === "NotSupportedError") return;
       wantPlay.current = false;
       setPlaying(false);
@@ -843,44 +812,6 @@ export function Player() {
     return stable as unknown as Actions;
   });
 
-  const requestMediaTranscode = (item: Track, mode: "video" | "audio") => {
-    if (transcodedUrls.has(item.id) || transcoding.has(item.id)) return;
-    const id = item.id;
-    const sourceUrl = item.url;
-    transcoding.add(id);
-    setImporting({ done: 0, total: 100, label: mode === "audio" ? "Converting audio for browser" : "Converting video for browser" });
-    void (async () => {
-      try {
-        const source = await fetch(sourceUrl).then((response) => {
-          if (!response.ok) throw new Error("Could not read the media");
-          return response.blob();
-        });
-        const converted = await transcodeForBrowser(source, (progress) => {
-          if (current?.id === id) {
-            setImporting({ done: Math.round(progress * 100), total: 100, label: mode === "audio" ? "Converting audio for browser" : "Converting video for browser" });
-          }
-        }, mode, id);
-        const url = URL.createObjectURL(converted);
-        transcodedUrls.set(id, url);
-        const el = mediaRef.current;
-        if (current?.id === id && el && loadedTrack.current?.id === id) {
-          el.src = url;
-          el.load();
-          if (wantPlay.current) startPlayback(el);
-        }
-      } catch {
-        if (current?.id === id) {
-          wantPlay.current = false;
-          setPlaying(false);
-          toast(mode === "audio" ? "FFmpeg could not convert this audio" : "FFmpeg could not convert this video");
-        }
-      } finally {
-        transcoding.delete(id);
-        if (current?.id === id) setImporting(null);
-      }
-    })();
-  };
-
   const handlers = useRef({ onTime: (_el: HTMLMediaElement) => {}, onMeta: (_el: HTMLMediaElement) => {}, onEnded: () => {}, onError: () => {}, onPause: () => {}, onBack: () => {} });
   handlers.current = {
     onTime(el) {
@@ -943,10 +874,6 @@ export function Player() {
       if (!current || !el) return;
       if (loadedTrack.current?.id !== current.id) return;
       const code = el.error?.code;
-      if ((code === MediaError.MEDIA_ERR_DECODE || code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) && !transcodedUrls.has(current.id) && !transcoding.has(current.id)) {
-        requestMediaTranscode(current, current.kind);
-        return;
-      }
       const reason = code === MediaError.MEDIA_ERR_ABORTED
         ? "playback was aborted"
         : code === MediaError.MEDIA_ERR_NETWORK
@@ -980,23 +907,6 @@ export function Player() {
         case "play": {
           setPlaying(true);
           resumeEngine();
-          const item = currentRef.current;
-          if (el === video && item?.kind === "video") {
-            window.clearTimeout(videoAudioProbeTimer.current);
-            const id = item.id;
-            videoAudioProbeTimer.current = window.setTimeout(() => {
-              const live = currentRef.current;
-              if (mediaRef.current !== video || live?.id !== id || video.paused || video.currentTime < 0.75) return;
-              if (transcodedUrls.has(id) || video.currentSrc !== live.url) return;
-              const decoded = (video as HTMLVideoElement & { webkitAudioDecodedByteCount?: number }).webkitAudioDecodedByteCount;
-              const nameLooksProblematic = /\.(mkv|avi|3gp|ts|m2ts|mts|vob|wmv|asf|flv|f4v|rmvb|rm)$/i.test(live.name)
-                || /\b(?:x265|x264|h[ ._-]?265|hevc|ac3|e[ ._-]?ac3|ddp|dd\+|dts)\b/i.test(live.name);
-              // Some browsers keep playing the video track while silently dropping
-              // an unsupported audio codec. Convert the original source before
-              // treating it as a real playback error.
-              if (nameLooksProblematic || decoded === 0) requestMediaTranscode(live, "video");
-            }, 1400);
-          }
           break;
         }
         case "pause":
@@ -1087,15 +997,8 @@ export function Player() {
     }
     setCurrentTime(pendingSeek.current ?? 0);
     setDuration(current.duration ?? 0);
-    if (current.kind === "video" && !transcodedUrls.has(current.id) && shouldTranscodeVideo(current.name)) {
-      requestMediaTranscode(current, "video");
-      return;
-    }
-    if (current.kind === "audio" && !transcodedUrls.has(current.id) && shouldTranscodeAudio(current.name)) {
-      requestMediaTranscode(current, "audio");
-      return;
-    }
-    el.src = transcodedUrls.get(current.id) ?? current.url;
+    // Always load the original media URL. Mortimer never transcodes user files.
+    el.src = current.url;
     el.defaultPlaybackRate = speed;
     el.playbackRate = speed;
     el.preservesPitch = preservePitch;
@@ -1194,11 +1097,6 @@ export function Player() {
     })();
   }, [comics, screen, reader, thumbTick]);
 
-  useEffect(() => () => {
-    window.clearTimeout(videoAudioProbeTimer.current);
-    for (const url of transcodedUrls.values()) URL.revokeObjectURL(url);
-    transcodedUrls.clear();
-  }, []);
 
   useEffect(() => {
     if (!loaded || rescanStarted.current) return;
