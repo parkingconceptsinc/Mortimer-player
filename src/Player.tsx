@@ -914,8 +914,9 @@ export function Player() {
         return;
       }
       if (ab.a != null && ab.b != null && t >= ab.b) el.currentTime = ab.a;
-      const d = codecAudioRef.current?.id === current?.id
-        ? codecAudioRef.current.buffer.duration
+      const codec = codecAudioRef.current;
+      const d = codec?.id === current?.id
+        ? codec.buffer.duration
         : el.duration;
       if (current && !counted.current && t >= Math.min(30, Number.isFinite(d) && d > 0 ? d * 0.5 : 30)) {
         counted.current = true;
