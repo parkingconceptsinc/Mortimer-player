@@ -113,6 +113,7 @@ export function Player() {
   const rescanStarted = useRef(false);
   const returnScreen = useRef<Screen>("library");
   const loadedTrack = useRef<{ id: string; kind: Track["kind"] } | null>(null);
+  const videoAudioProbeTimer = useRef<number | undefined>(undefined);
 
   const [loaded, setLoaded] = useState(false);
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -852,8 +853,29 @@ export function Player() {
       const el = event.currentTarget as HTMLMediaElement;
       if (el !== mediaRef.current) return;
       switch (event.type) {
-        case "play": setPlaying(true); resumeEngine(); break;
-        case "pause": setPlaying(false); handlers.current.onPause(); break;
+        case "play":
+          setPlaying(true);
+          resumeEngine();
+          if (el === video && current?.kind === "video") {
+            window.clearTimeout(videoAudioProbeTimer.current);
+            const id = current.id;
+            videoAudioProbeTimer.current = window.setTimeout(() => {
+              if (mediaRef.current !== video || current?.id !== id || video.paused || video.currentTime < 0.75) return;
+              const decoded = (video as HTMLVideoElement & { webkitAudioDecodedByteCount?: number }).webkitAudioDecodedByteCount;
+              const nameLooksProblematic = /\\.(mkv|avi|3gp)$/i.test(current.name)
+                || /\\b(?:x265|x264|h[ ._-]?265|hevc|ac3|e[ ._-]?ac3|dts)\\b/i.test(current.name);
+              // Some browsers keep playing the video track while silently dropping
+              // an unsupported audio codec. In Chromium, zero decoded audio bytes
+              // after playback has started is a strong signal for that case.
+              if (nameLooksProblematic || decoded === 0) handlers.current.onError();
+            }, 1400);
+          }
+          break;
+        case "pause":
+          window.clearTimeout(videoAudioProbeTimer.current);
+          setPlaying(false);
+          handlers.current.onPause();
+          break;
         case "timeupdate": handlers.current.onTime(el); break;
         case "loadedmetadata":
         case "durationchange": handlers.current.onMeta(el); break;
@@ -899,6 +921,7 @@ export function Player() {
     const audio = audioRef.current;
     const video = videoRef.current;
     if (!audio || !video) return;
+    window.clearTimeout(videoAudioProbeTimer.current);
     const previous = loadedTrack.current;
     if (previous?.kind === "video" && video.getAttribute("src") && video.currentTime > 0 && !video.ended) {
       const t = video.currentTime;
