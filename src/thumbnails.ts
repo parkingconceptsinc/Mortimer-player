@@ -19,8 +19,12 @@ export function captureVideoFrame(url: string): Promise<{ image: Blob | null; du
       if (settled) return;
       if (!video.videoWidth || !video.videoHeight) return finish(null);
       const canvas = document.createElement("canvas");
-      canvas.width = 384;
-      canvas.height = Math.max(1, Math.round((384 * video.videoHeight) / video.videoWidth));
+      const baseWidth = 384;
+      const baseHeight = Math.max(1, Math.round((baseWidth * video.videoHeight) / Math.max(1, video.videoWidth)));
+      const maxPixels = 550_000;
+      const scale = baseWidth * baseHeight > maxPixels ? Math.sqrt(maxPixels / (baseWidth * baseHeight)) : 1;
+      canvas.width = Math.max(1, Math.round(baseWidth * scale));
+      canvas.height = Math.max(1, Math.round(baseHeight * scale));
       const ctx = canvas.getContext("2d");
       if (!ctx) return finish(null);
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
