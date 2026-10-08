@@ -492,9 +492,9 @@ export function Player() {
       const scanBatchSize = 50;
       for (let start = 0; start < pending.length; start += scanBatchSize) {
         const batch = pending.slice(start, start + scanBatchSize);
-        const files = await Promise.all(batch.map(async ({ file, path }) => ({ file: await file(), path })));
-        found.push(...files);
-        setImporting({ done: found.length, total: pending.length, label: "Scanning" });
+        const results = await Promise.allSettled(batch.map(async ({ file, path }) => ({ file: await file(), path })));
+        for (const result of results) if (result.status === "fulfilled") found.push(result.value);
+        setImporting({ done: Math.min(start + batch.length, pending.length), total: pending.length, label: "Scanning" });
       }
 
       setImporting({ done: 0, total: found.length, label: "Adding" });
