@@ -25,7 +25,10 @@ export async function readTags(file: Blob, name: string): Promise<Tags> {
     tags.year = common.year || undefined;
     tags.trackNo = common.track?.no ?? undefined;
     tags.duration = format.duration && Number.isFinite(format.duration) ? format.duration : undefined;
-  const picture = common.picture?.[0];
+  const picture = common.picture?.find((candidate) => {
+    const type = (candidate as { type?: unknown }).type;
+    return type === 3 || /front/i.test(String(type));
+  }) ?? common.picture?.find((candidate) => /cover/i.test(String((candidate as { type?: unknown }).type ?? ""))) ?? common.picture?.[0];
   if (picture) tags.cover = new Blob([new Uint8Array(picture.data)], { type: picture.format });
   return tags;
 }

@@ -452,7 +452,7 @@ export function Player() {
             if (!live) return old;
             const cover = tags.cover ? URL.createObjectURL(tags.cover) : live.cover;
             if (tags.cover && live.cover) URL.revokeObjectURL(live.cover);
-            return old.map((track) => (track.id === item.id ? { ...track, ...tags, cover } : track));
+            return old.map((track) => (track.id === item.id ? { ...track, ...tags, cover, metaVersion: META_VERSION } : track));
           });
         });
       }
