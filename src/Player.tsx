@@ -234,7 +234,8 @@ export function Player() {
     };
     const fresh = entries.filter((e) => supported(e.file.name) && isNew(e));
     const freshComics = entries.filter((e) => isComicFile(e.file.name) && isNew(e));
-    if (!fresh.length && !freshComics.length) {
+    const totalToAdd = fresh.length + freshComics.length;
+    if (!totalToAdd) {
       toast(entries.some((e) => supported(e.file.name) || isComicFile(e.file.name)) ? "Those files are already in your library" : "No supported music, video or comic files found");
       return;
     }
@@ -243,15 +244,18 @@ export function Player() {
     let libraryStorageOk = true;
     let comicStorageOk = true;
 
+    let processed = 0;
+    setImporting({ done: 0, total: totalToAdd, label: "Adding" });
+
     if (freshComics.length) {
       const items: StoredComic[] = freshComics.map(({ file, path }, i) => ({
         id: crypto.randomUUID(), name: file.name, path, size: file.size, lastModified: file.lastModified, addedAt: addedAt + i, format: comicFormatOf(file.name), shelf: defaultShelf(comicFormatOf(file.name)), file,
       }));
       try { await saveComics(items); } catch { comicStorageOk = false; }
       setComics((old) => [...old, ...items.map(toComic)]);
+      processed += items.length;
+      setImporting({ done: processed, total: totalToAdd, label: "Adding" });
     }
-
-    if (fresh.length) setImporting({ done: 0, total: fresh.length });
     let batch: StoredLibraryItem[] = [];
     const flush = async () => {
       const items = batch;
@@ -286,7 +290,8 @@ export function Player() {
         fresh.slice(start, end).map((entry, offset) => readItem(entry, addedAt + start + offset)),
       );
       batch.push(...items);
-      setImporting({ done: end, total: fresh.length });
+      processed += items.length;
+      setImporting({ done: processed, total: totalToAdd, label: "Adding" });
       await flush();
     }
     await flush();
@@ -321,9 +326,9 @@ export function Player() {
           }
         }
       };
-      setImporting({ done: 0, total: 0 });
+      setImporting({ done: 0, total: 0, label: "Scanning" });
       await walk(directory, directory.name);
-      setImporting(null);
+      setImporting({ done: 0, total: found.length, label: "Adding" });
       await importEntries(found, directory.name);
     } catch (error) {
       setImporting(null);
