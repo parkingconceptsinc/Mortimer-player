@@ -89,6 +89,7 @@ export function Player() {
   const codecFallbackBusy = useRef<string | null>(null);
   const codecFallbackAttempted = useRef(new Set<string>());
   const videoAudioProbeTimer = useRef<number | undefined>(undefined);
+  const codecTickTimer = useRef<number | undefined>(undefined);
 
   const [loaded, setLoaded] = useState(false);
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -171,6 +172,8 @@ export function Player() {
   }
 
   function stopCodecAudio() {
+    window.clearInterval(codecTickTimer.current);
+    codecTickTimer.current = undefined;
     const state = codecAudioRef.current;
     codecAudioRef.current = null;
     if (!state) return;
@@ -178,6 +181,13 @@ export function Player() {
     state.source?.disconnect();
     state.gain.disconnect();
     void state.context.close().catch(() => {});
+  }
+
+  function finishCodecAudio(id: string) {
+    const state = codecAudioRef.current;
+    if (!state || state.id !== id) return;
+    stopCodecAudio();
+    handlers.current.onEnded();
   }
 
   function codecAudioTime() {
@@ -201,7 +211,27 @@ export function Player() {
     state.offset = safeOffset;
     state.startedAt = state.context.currentTime;
     void state.context.resume().catch(() => {});
+    source.onended = () => {
+      const live = codecAudioRef.current;
+      if (live?.id === current?.id && live.source === source && live.buffer.duration > 0) {
+        finishCodecAudio(live.id);
+      }
+    };
     try { source.start(0, safeOffset); } catch {}
+    window.clearInterval(codecTickTimer.current);
+    codecTickTimer.current = window.setInterval(() => {
+      const live = codecAudioRef.current;
+      if (!live || live.id !== current?.id || live.source !== source) return;
+      const t = codecAudioTime();
+      if (t == null) return;
+      setCurrentTime(t);
+      setDuration(live.buffer.duration);
+      if (ab.a != null && ab.b != null && t >= ab.b) {
+        startCodecAudio(ab.a);
+        return;
+      }
+      if (t >= live.buffer.duration - 0.05) finishCodecAudio(live.id);
+    }, 200);
   }
 
   async function activateCodecAudio(item: Track, el: HTMLMediaElement) {
@@ -215,7 +245,7 @@ export function Player() {
       const response = await fetch(item.url);
       if (!response.ok) throw new Error("Could not read the original media");
       const decoded = await decodeAudioTrack(await response.blob());
-      if (current?.id !== item.id || videoRef.current !== el) {
+      if (current?.id !== item.id || (item.kind === "video" ? videoRef.current !== el : audioRef.current !== el)) {
         void decoded.context.close().catch(() => {});
         return false;
       }
@@ -289,10 +319,10 @@ export function Player() {
   function saveResume() {
     const el = mediaRef.current;
     if (!current || !el) return;
-    writePref("resume", { id: current.id, time: el.currentTime });
-    if (current.kind === "video" && el.currentTime > 0) {
+    const t = codecAudioRef.current?.id === current.id ? (codecAudioTime() ?? 0) : el.currentTime;
+    writePref("resume", { id: current.id, time: t });
+    if (current.kind === "video" && t > 0) {
       const id = current.id;
-      const t = el.currentTime;
       setVideoProgress((p) => ({ ...p, [id]: t }));
     }
   }
@@ -578,14 +608,23 @@ export function Player() {
     next: () => advance(1, false),
     prev() {
       const el = mediaRef.current;
-      if (el && el.currentTime > 3) el.currentTime = 0;
+      const codecTime = codecAudioRef.current?.id === current?.id ? codecAudioTime() : null;
+      if (codecTime != null) {
+        if (codecTime > 3) startCodecAudio(0);
+        else advance(-1, false);
+      } else if (el && el.currentTime > 3) el.currentTime = 0;
       else advance(-1, false);
     },
     seek(time) {
       const el = mediaRef.current;
       if (!el || !Number.isFinite(time)) return;
+      const codec = codecAudioRef.current?.id === current?.id ? codecAudioRef.current : null;
+      if (codec) {
+        startCodecAudio(Math.max(0, Math.min(time, codec.buffer.duration)));
+        setCurrentTime(Math.max(0, Math.min(time, codec.buffer.duration)));
+        return;
+      }
       el.currentTime = Math.max(0, Math.min(time, el.duration || time));
-      if (codecAudioRef.current?.id === current?.id) startCodecAudio(Math.max(0, Math.min(time, codecAudioRef.current.buffer.duration)));
       setCurrentTime(el.currentTime);
     },
     seekBy(delta) {
@@ -769,7 +808,9 @@ export function Player() {
       }
     },
     cycleAB() {
-      const t = mediaRef.current?.currentTime ?? 0;
+      const t = codecAudioRef.current?.id === current?.id
+        ? (codecAudioTime() ?? 0)
+        : (mediaRef.current?.currentTime ?? 0);
       if (ab.a == null) {
         setAb({ a: t, b: null });
         toast("Loop start (A) set");
@@ -866,10 +907,16 @@ export function Player() {
   const handlers = useRef({ onTime: (_el: HTMLMediaElement) => {}, onMeta: (_el: HTMLMediaElement) => {}, onEnded: () => {}, onError: () => {}, onPause: () => {}, onBack: () => {} });
   handlers.current = {
     onTime(el) {
-      const t = el.currentTime;
+      const t = codecAudioRef.current?.id === current?.id ? (codecAudioTime() ?? 0) : el.currentTime;
       setCurrentTime(t);
+      if (codecAudioRef.current?.id === current?.id && ab.a != null && ab.b != null && t >= ab.b) {
+        startCodecAudio(ab.a);
+        return;
+      }
       if (ab.a != null && ab.b != null && t >= ab.b) el.currentTime = ab.a;
-      const d = el.duration;
+      const d = codecAudioRef.current?.id === current?.id
+        ? codecAudioRef.current.buffer.duration
+        : el.duration;
       if (current && !counted.current && t >= Math.min(30, Number.isFinite(d) && d > 0 ? d * 0.5 : 30)) {
         counted.current = true;
         const id = current.id;
@@ -881,7 +928,7 @@ export function Player() {
         saveResume();
       }
       if ("mediaSession" in navigator && Number.isFinite(d) && d > 0) {
-        try { navigator.mediaSession.setPositionState({ duration: d, playbackRate: el.playbackRate, position: Math.min(t, d) }); } catch {}
+        try { navigator.mediaSession.setPositionState({ duration: d, playbackRate: codecAudioRef.current?.id === current?.id ? speed : el.playbackRate, position: Math.min(t, d) }); } catch {}
       }
     },
     onMeta(el) {
