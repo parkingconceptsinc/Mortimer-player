@@ -48,6 +48,7 @@ const MIME: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", pn
 const mimeOf = (name: string) => MIME[name.split(".").pop()!.toLowerCase()] ?? "application/octet-stream";
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 const isPage = (name: string) => IMAGE.test(name) && !name.includes("__MACOSX") && !name.split("/").pop()!.startsWith(".");
+let rarWasmBinary: Promise<ArrayBuffer> | null = null;
 
 export async function openComic(file: Blob, onProgress?: (fraction: number) => void, options?: { firstPageOnly?: boolean }): Promise<ComicSource> {
   const head = new Uint8Array(await file.slice(0, 6).arrayBuffer());
@@ -149,7 +150,14 @@ async function openZip(file: Blob): Promise<ComicSource> {
 
 async function openRar(file: Blob, onProgress?: (fraction: number) => void, firstPageOnly = false): Promise<ComicSource> {
   const [{ createExtractorFromData }, wasm] = await Promise.all([import("node-unrar-js"), import("node-unrar-js/esm/js/unrar.wasm?url")]);
-  const [wasmBinary, data] = await Promise.all([fetch(wasm.default).then((r) => r.arrayBuffer()), file.arrayBuffer()]);
+  rarWasmBinary ??= fetch(wasm.default).then((response) => {
+    if (!response.ok) throw new Error("Couldn't load the CBR decoder.");
+    return response.arrayBuffer();
+  }).catch((error) => {
+    rarWasmBinary = null;
+    throw error;
+  });
+  const [wasmBinary, data] = await Promise.all([rarWasmBinary, file.arrayBuffer()]);
   const extractor = await createExtractorFromData({ wasmBinary, data });
   const names = [...extractor.getFileList().fileHeaders]
     .filter((h) => !h.flags.directory && isPage(h.name))
