@@ -77,7 +77,7 @@ export function Settings() {
         <Row label={`${p.tracks.length} media · ${p.comics.length} books/comics · ${formatSize(librarySize)}`} hint={storage.quota ? `Using ${formatSize(storage.usage ?? 0)} of ${formatSize(storage.quota)} available to this app` : undefined}>
           <HardDrive size={20} className="muted" />
         </Row>
-        <Row label="Protect library from automatic cleanup" hint={storage.persisted ? "Granted — the browser won't evict your library" : "Asks the browser to keep your files even when space runs low"}>
+        <Row label="Protect library from automatic cleanup" hint={storage.persisted ? "Granted — automatic storage eviction is disabled for this site" : "Asks the browser to make library eviction less likely when space runs low"}>
           {storage.persisted ? <span className="badge">On</span> : (
             <button className="btn small" onClick={() => {
               void navigator.storage?.persist?.().then((ok) => {
@@ -98,7 +98,7 @@ export function Settings() {
           <summary><Keyboard size={17} /> Keyboard shortcuts</summary>
           <dl>{SHORTCUTS.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
         </details>
-        <p className="hint">Everything stays on this device. Swipe the album art to change tracks; double-tap the left or right of a video to skip.</p>
+        <p className="hint">Your media stays on this device. Browser-side conversion downloads its engine only when needed. Swipe the album art to change tracks; double-tap the left or right of a video to skip.</p>
       </Card>
     </section>
   );
