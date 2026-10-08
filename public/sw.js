@@ -1,4 +1,4 @@
-const CACHE = "six-shell-v7";
+const CACHE = "six-shell-v8";
 const SHELL = [
   "/Mortimer-player/",
   "/Mortimer-player/manifest.webmanifest",
@@ -36,6 +36,7 @@ self.addEventListener("fetch", (event) => {
 
   const sameOrigin = new URL(request.url).origin === self.location.origin;
   const staticAsset = ["script", "style", "font", "image", "manifest", "worker"].includes(request.destination);
+  const wasmAsset = sameOrigin && new URL(request.url).pathname.endsWith(".wasm");
 
   const cacheResponse = (response) => {
     if (sameOrigin && response.ok && response.type === "basic") {
@@ -46,7 +47,7 @@ self.addEventListener("fetch", (event) => {
   };
 
   event.respondWith(
-    staticAsset
+    staticAsset || wasmAsset
       ? caches.match(request).then((cached) => cached || fetch(request).then(cacheResponse))
       : fetch(request).then(cacheResponse).catch(() =>
           caches.match(request).then((cached) => cached || caches.match("/Mortimer-player/"))

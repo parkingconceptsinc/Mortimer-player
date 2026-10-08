@@ -1,5 +1,10 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
+// Keep the FFmpeg core inside the application bundle. These URLs are generated
+// by Vite from node_modules, so playback never needs a CDN or an Internet
+// connection after the app has been installed/cached.
+import coreURL from "@ffmpeg/core?url";
+import wasmURL from "@ffmpeg/core/wasm?url";
 
 let ffmpeg: FFmpeg | null = null;
 let loading: Promise<FFmpeg> | null = null;
@@ -17,10 +22,9 @@ async function getFFmpeg(): Promise<FFmpeg> {
   loading ??= (async () => {
     const instance = ffmpeg ?? new FFmpeg();
     ffmpeg = instance;
-    const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
     await instance.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+      coreURL: await toBlobURL(coreURL, "text/javascript"),
+      wasmURL: await toBlobURL(wasmURL, "application/wasm"),
     });
     return instance;
   })().catch((error) => {
