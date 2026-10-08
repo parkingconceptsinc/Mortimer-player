@@ -41,7 +41,9 @@ export async function readItem({ file, path }: Incoming, addedAt: number): Promi
     path,
     size: file.size,
     lastModified: file.lastModified,
-    file,
+    // Store a plain Blob rather than the File object. This avoids IndexedDB clone issues
+    // in browsers that handle File objects inconsistently across sessions.
+    file: new Blob([file], { type: file.type || "application/octet-stream" }),
     title: stripExt(file.name),
     addedAt,
     metaVersion: META_VERSION,
