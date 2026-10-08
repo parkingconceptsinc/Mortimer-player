@@ -1073,7 +1073,7 @@ export function Player() {
   }, [tracks, screen, thumbTick]);
 
   useEffect(() => {
-    if (screen !== "comics" || reader || comicBusy.current) return;
+    if ((screen !== "comics" && screen !== "books") || reader || comicBusy.current) return;
     const next = comics.find((c) => (!c.cover || (!c.pages && c.format !== "epub")) && !comicCoverAttempted.has(c.id));
     if (!next) return;
     comicCoverAttempted.add(next.id);
