@@ -421,30 +421,43 @@ export function Player() {
     };
     // Process files in parallel batches. Awaiting each file one by one makes
     // large libraries feel unnecessarily slow, especially when importing folders.
+    let importedMedia = 0;
+    let importFailures = 0;
     const importBatchSize = 50;
     for (let start = 0; start < fresh.length; start += importBatchSize) {
       const end = Math.min(start + importBatchSize, fresh.length);
-      const items = await Promise.all(
+      const results = await Promise.allSettled(
         fresh.slice(start, end).map((entry, offset) => readItem(entry, addedAt + start + offset)),
       );
+      const items: StoredLibraryItem[] = [];
+      for (const result of results) {
+        if (result.status === "fulfilled") items.push(result.value);
+        else importFailures++;
+      }
       batch.push(...items);
-      processed += items.length;
+      importedMedia += items.length;
+      processed += results.length;
       setImporting({ done: processed, total: totalToAdd, label: "Adding" });
       await flush();
     }
     await flush();
     setImporting(null);
     const parts = [
-      fresh.length ? `${fresh.length} song${fresh.length === 1 ? "" : "s"}/video${fresh.length === 1 ? "" : "s"}` : "",
+      importedMedia ? `${importedMedia} song${importedMedia === 1 ? "" : "s"}/video${importedMedia === 1 ? "" : "s"}` : "",
       ...(["books", "comics"] as const).map((shelf) => {
         const n = freshComics.filter((e) => defaultShelf(comicFormatOf(e.file.name)) === shelf).length;
         return n ? `${n} ${shelf === "books" ? "book" : "comic"}${n === 1 ? "" : "s"}` : "";
       }),
-    ].filter(Boolean).join(" and ");
-    const what = `${parts} added${label ? ` from “${label}”` : ""}`;
-    toast(libraryStorageOk && comicStorageOk ? what : `${what}, but some items couldn't be saved for next time`);
+    ].filter(Boolean);
+    const what = parts.length
+      ? `${parts.join(" and ")} added${label ? ` from “${label}”` : ""}`
+      : "Nothing was added";
+    const failureNote = importFailures
+      ? ` · ${importFailures} media file${importFailures === 1 ? "" : "s"} couldn't be imported`
+      : "";
+    const storageNote = libraryStorageOk && comicStorageOk ? "" : ", but some items couldn't be saved for next time";
+    toast(`${what}${failureNote}${storageNote}`);
   }
-
   async function importFolder() {
     const pickerHost = window as Window & { showDirectoryPicker?: (options?: { mode?: "read" }) => Promise<DirectoryHandleLike> };
     if (!pickerHost.showDirectoryPicker) {
