@@ -169,7 +169,8 @@ async function openRar(file: Blob, onProgress?: (fraction: number) => void, firs
 
     const task = (async () => {
       const { files } = extractor.extract({ files: [name] });
-      const fileEntry = files[0];
+      const extracted = [...files];
+      const fileEntry = extracted[0];
       if (!fileEntry?.extraction) throw new Error(`Page ${index + 1} could not be extracted.`);
       const blob = new Blob([new Uint8Array(fileEntry.extraction)], { type: mimeOf(name) });
       if (!closed) cache.set(index, blob);
@@ -199,9 +200,7 @@ async function openRar(file: Blob, onProgress?: (fraction: number) => void, firs
     close() {
       closed = true;
       pending.clear();
-      for (const [index] of cache) {
-        if (index !== 0) cache.delete(index);
-      }
+      cache.clear();
     },
   };
 }
