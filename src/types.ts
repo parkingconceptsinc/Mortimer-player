@@ -28,7 +28,12 @@ export type Playlist = { id: string; name: string; trackIds: string[]; createdAt
 
 export type Screen = "library" | "videos" | "books" | "comics" | "player" | "queue" | "eq" | "settings";
 
-export type ComicFormat = "cbz" | "cbr" | "pdf" | "epub";
+export type ComicFormat =
+  | "cbz" | "cbr" | "pdf" | "epub"
+  | "txt" | "md" | "markdown" | "log" | "nfo"
+  | "csv" | "tsv" | "json" | "xml" | "yaml" | "yml" | "toml" | "ini" | "cfg" | "conf"
+  | "srt" | "vtt" | "ass" | "ssa" | "sub"
+  | "html" | "htm" | "rtf" | "docx" | "odt";
 
 export type Shelf = "books" | "comics";
 
