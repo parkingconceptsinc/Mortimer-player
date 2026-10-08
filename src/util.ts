@@ -1,7 +1,7 @@
 import type { SongSort, Track } from "./types";
 import type { StoredLibraryItem } from "./library";
 
-export const audioExt = /\.(mp3|wav|flac|m4a|aac|ogg|oga|opus|weba|aiff|aif|alac|wma|mka)$/i;
+export const audioExt = /\.(mp3|wav|flac|m4a|aac|ogg|oga|opus|weba|aiff|aif|alac|wma|mka|mp2|mpa|ac3|eac3|dts|amr)$/i;
 export const videoExt = /\.(mp4|webm|ogv|mov|m4v|mkv|avi|3gp)$/i;
 
 export const supported = (name: string) => audioExt.test(name) || videoExt.test(name);
