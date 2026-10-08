@@ -50,55 +50,85 @@ const ffmpeg = new FFmpeg();
 let ffmpegLoad: Promise<void> | null = null;
 const transcodedUrls = new Map<string, string>();
 const transcoding = new Set<string>();
+let ffmpegQueue: Promise<unknown> = Promise.resolve();
+
+function enqueueFfmpeg<T>(task: () => Promise<T>) {
+  const next = ffmpegQueue.then(task, task);
+  ffmpegQueue = next.then(() => undefined, () => undefined);
+  return next;
+}
 
 function shouldTranscodeVideo(name: string) {
   return /\b(?:x265|hevc|h[ ._-]?265|ddp(?:\d+(?:\.\d+)?)?|dd\+|e[ ._-]?ac3|ac3|dts)\b/i.test(name);
 }
 
-async function transcodeForBrowser(source: Blob, onProgress: (progress: number) => void): Promise<Blob> {
-  if (!ffmpeg.loaded) {
-    ffmpegLoad ??= (async () => {
-      const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
-      await ffmpeg.load({
-        coreURL: await toBlobURL(baseURL + "/ffmpeg-core.js", "text/javascript"),
-        wasmURL: await toBlobURL(baseURL + "/ffmpeg-core.wasm", "application/wasm"),
+async function transcodeForBrowser(source: Blob, onProgress: (progress: number) => void, mode: "video" | "audio", id: string): Promise<Blob> {
+  return enqueueFfmpeg(async () => {
+    if (!ffmpeg.loaded) {
+      ffmpegLoad ??= (async () => {
+        const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
+        await ffmpeg.load({
+          coreURL: await toBlobURL(baseURL + "/ffmpeg-core.js", "text/javascript"),
+          wasmURL: await toBlobURL(baseURL + "/ffmpeg-core.wasm", "application/wasm"),
+        });
+      })().catch((error) => {
+        ffmpegLoad = null;
+        throw error;
       });
-    })().catch((error) => {
-      ffmpegLoad = null;
-      throw error;
-    });
-    await ffmpegLoad;
-  }
-  const input = "mortimer-input.mkv";
-  const output = "mortimer-output.mp4";
-  const progress = ({ progress }: { progress: number }) => onProgress(Math.max(0, Math.min(1, progress)));
-  ffmpeg.on("progress", progress);
-  try {
-    await ffmpeg.writeFile(input, await fetchFile(source));
-    const code = await ffmpeg.exec([
-      "-i", input,
-      "-map", "0:v:0",
-      "-map", "0:a:0?",
-      "-c:v", "libx264",
-      "-preset", "ultrafast",
-      "-crf", "23",
-      "-pix_fmt", "yuv420p",
-      "-c:a", "aac",
-      "-b:a", "192k",
-      "-movflags", "+faststart",
-      "-y", output,
-    ]);
-    if (code !== 0) throw new Error("FFmpeg could not transcode this file");
-    const data = await ffmpeg.readFile(output);
-    const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
-    const buffer = new ArrayBuffer(bytes.byteLength);
-    new Uint8Array(buffer).set(bytes);
-    return new Blob([buffer], { type: "video/mp4" });
-  } finally {
-    ffmpeg.off("progress", progress);
-    await ffmpeg.deleteFile(input).catch(() => {});
-    await ffmpeg.deleteFile(output).catch(() => {});
-  }
+      await ffmpegLoad;
+    }
+    const safeId = id.replace(/[^a-z0-9_-]/gi, "").slice(0, 24) || "item";
+    const input = "mortimer-input-" + safeId + (mode === "audio" ? ".audio" : ".mkv");
+    const output = mode === "audio" ? "mortimer-output-" + safeId + ".m4a" : "mortimer-output-" + safeId + ".mp4";
+    const progress = ({ progress }: { progress: number }) => onProgress(Math.max(0, Math.min(1, progress)));
+    ffmpeg.on("progress", progress);
+    try {
+      await ffmpeg.writeFile(input, await fetchFile(source));
+      const args = mode === "audio"
+        ? [
+            "-i", input,
+            "-map", "0:a:0?",
+            "-vn",
+            "-c:a", "aac",
+            "-b:a", "256k",
+            "-movflags", "+faststart",
+            "-y", output,
+          ]
+        : [
+            "-i", input,
+            "-map", "0:v:0",
+            "-map", "0:a:0?",
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-crf", "23",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-movflags", "+faststart",
+            "-y", output,
+          ];
+      const code = await ffmpeg.exec(args);
+      if (code !== 0) throw new Error("FFmpeg could not transcode this file");
+      const data = await ffmpeg.readFile(output);
+      const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
+      const buffer = new ArrayBuffer(bytes.byteLength);
+      new Uint8Array(buffer).set(bytes);
+      return new Blob([buffer], { type: mode === "audio" ? "audio/mp4" : "video/mp4" });
+    } finally {
+      ffmpeg.off("progress", progress);
+      await ffmpeg.deleteFile(input).catch(() => {});
+      await ffmpeg.deleteFile(output).catch(() => {});
+    }
+  });
+}
+
+function shouldTranscodeVideo(name: string) {
+  return /\b(?:x265|hevc|h[ ._-]?265|ddp(?:\d+(?:\.\d+)?)?|dd\+|e[ ._-]?ac3|ac3|dts)\b/i.test(name);
+}
+
+function shouldTranscodeAudio(name: string) {
+  return /\.(?:flac|wma|ac3|eac3|dts|ape|tak|tta|mpc|wv|shn|ra|rm|rma)$/i.test(name)
+    || /\b(?:ac3|eac3|ddp|dd\+|dts|dolby|truehd|alac|ape|tak|tta|wv|shn)\b/i.test(name);
 }
 
 export function Player() {
@@ -738,33 +768,33 @@ export function Player() {
     return stable as unknown as Actions;
   });
 
-  const requestVideoTranscode = (item: Track) => {
+  const requestMediaTranscode = (item: Track, mode: "video" | "audio") => {
     if (transcodedUrls.has(item.id) || transcoding.has(item.id)) return;
     const id = item.id;
     const sourceUrl = item.url;
     transcoding.add(id);
-    setImporting({ done: 0, total: 100, label: "Converting video for browser" });
+    setImporting({ done: 0, total: 100, label: mode === "audio" ? "Converting audio for browser" : "Converting video for browser" });
     void (async () => {
       try {
         const source = await fetch(sourceUrl).then((response) => {
-          if (!response.ok) throw new Error("Could not read the video");
+          if (!response.ok) throw new Error("Could not read the media");
           return response.blob();
         });
         const converted = await transcodeForBrowser(source, (progress) => {
           if (current?.id === id) {
-            setImporting({ done: Math.round(progress * 100), total: 100, label: "Converting video for browser" });
+            setImporting({ done: Math.round(progress * 100), total: 100, label: mode === "audio" ? "Converting audio for browser" : "Converting video for browser" });
           }
-        });
+        }, mode, id);
         const url = URL.createObjectURL(converted);
         transcodedUrls.set(id, url);
-        const video = videoRef.current;
-        if (current?.id === id && mediaRef.current === video && video) {
-          video.src = url;
-          video.load();
-          if (wantPlay.current) startPlayback(video);
+        const el = mediaRef.current;
+        if (current?.id === id && el && loadedTrack.current?.id === id) {
+          el.src = url;
+          el.load();
+          if (wantPlay.current) startPlayback(el);
         }
       } catch {
-        if (current?.id === id) toast("FFmpeg could not convert this video");
+        if (current?.id === id) toast(mode === "audio" ? "FFmpeg could not convert this audio" : "FFmpeg could not convert this video");
       } finally {
         transcoding.delete(id);
         if (current?.id === id) setImporting(null);
@@ -833,7 +863,11 @@ export function Player() {
       if (!current) return;
       const el = mediaRef.current;
       if (current.kind === "video" && !transcodedUrls.has(current.id)) {
-        requestVideoTranscode(current);
+        requestMediaTranscode(current, "video");
+        return;
+      }
+      if (current.kind === "audio" && !transcodedUrls.has(current.id)) {
+        requestMediaTranscode(current, "audio");
         return;
       }
       const code = el?.error?.code;
@@ -974,10 +1008,14 @@ export function Player() {
     setCurrentTime(pendingSeek.current ?? 0);
     setDuration(current.duration ?? 0);
     if (current.kind === "video" && !transcodedUrls.has(current.id) && shouldTranscodeVideo(current.name)) {
-      requestVideoTranscode(current);
+      requestMediaTranscode(current, "video");
       return;
     }
-    el.src = current.kind === "video" ? (transcodedUrls.get(current.id) ?? current.url) : current.url;
+    if (current.kind === "audio" && !transcodedUrls.has(current.id) && shouldTranscodeAudio(current.name)) {
+      requestMediaTranscode(current, "audio");
+      return;
+    }
+    el.src = transcodedUrls.get(current.id) ?? current.url;
     el.defaultPlaybackRate = speed;
     el.playbackRate = speed;
     el.preservesPitch = preservePitch;
