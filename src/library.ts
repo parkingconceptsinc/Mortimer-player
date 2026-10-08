@@ -26,7 +26,12 @@ export type StoredComic = {
   size: number;
   lastModified: number;
   addedAt: number;
-  format: "cbz" | "cbr" | "pdf" | "epub";
+  format:
+    | "cbz" | "cbr" | "pdf" | "epub"
+    | "txt" | "md" | "markdown" | "log" | "nfo"
+    | "csv" | "tsv" | "json" | "xml" | "yaml" | "yml" | "toml" | "ini" | "cfg" | "conf"
+    | "srt" | "vtt" | "ass" | "ssa" | "sub"
+    | "html" | "htm" | "rtf" | "docx" | "odt";
   shelf?: "books" | "comics";
   title?: string;
   author?: string;
