@@ -410,6 +410,21 @@ video::cue { font-size: var(--cue, 100%); background: #000b; }
 .pageThumb img, .pageThumbEmpty { display: block; width: 100%; aspect-ratio: 2 / 3; object-fit: cover; background: #ffffff0d; }
 .pageThumb small { position: absolute; right: 5px; bottom: 5px; padding: 1px 6px; border-radius: 6px; background: #000b; font-size: 11px; font-variant-numeric: tabular-nums; }
 
+/* ---------- Text/document reader ---------- */
+.textReader { background: var(--bg); color: var(--text); overflow: hidden; }
+.textReader .rdChrome { z-index: 3; }
+.textBody { position: absolute; inset: 0; overflow: auto; padding: calc(74px + env(safe-area-inset-top)) 16px calc(32px + env(safe-area-inset-bottom)); overscroll-behavior: contain; background: var(--bg); color: var(--text); }
+.textPaper { width: min(100%, 900px); margin: 0 auto 40px; padding: 28px clamp(18px, 5vw, 48px) 56px; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); box-shadow: 0 12px 40px #0005; }
+.textHeading { display: flex; align-items: center; gap: 9px; margin-bottom: 18px; color: var(--muted); font-size: 13px; font-weight: 700; }
+.textHeading svg { color: var(--accent); flex: none; }
+.textPaper pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 400 15px/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--text); }
+.textHtml { position: absolute; inset: 0; display: block; background: #fff; }
+@media (max-width: 600px) {
+  .textBody { padding-left: 10px; padding-right: 10px; }
+  .textPaper { border-radius: 14px; padding: 22px 14px 44px; }
+  .textPaper pre { font-size: 14px; line-height: 1.55; }
+}
+
 /* ---------- Books ---------- */
 .segmented { display: flex; gap: 4px; margin: 2px 0 14px; padding: 4px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
 .segmented button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 10px; border: 0; border-radius: 10px; background: none; color: var(--muted); font-size: 14px; font-weight: 650; }
