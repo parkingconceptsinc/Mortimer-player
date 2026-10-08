@@ -21,6 +21,7 @@ import { Videos } from "./screens/Videos";
 import { Comics } from "./screens/Comics";
 import { ComicReader } from "./screens/ComicReader";
 import { EpubReader } from "./screens/EpubReader";
+import { TextReader } from "./screens/TextReader";
 import { readEpubInfo } from "./epub";
 
 const NAV: Array<[Screen, string, string, LucideIcon, boolean]> = [
@@ -1316,7 +1317,7 @@ export function Player() {
             ))}
           </nav>
 
-          {reader && (comics.find((c) => c.id === reader.id)?.format === "epub" ? <EpubReader key={reader.id} /> : <ComicReader key={reader.id} />)}
+          {reader && (() => { const item = comics.find((c) => c.id === reader.id); return item?.format === "epub" ? <EpubReader key={reader.id} /> : item && ["txt", "md", "markdown", "log", "nfo", "csv", "tsv", "json", "xml", "yaml", "yml", "toml", "ini", "cfg", "conf", "srt", "vtt", "ass", "ssa", "sub", "html", "htm", "rtf", "docx", "odt"].includes(item.format) ? <TextReader key={reader.id} /> : <ComicReader key={reader.id} />; })()}
           {menu && <TrackMenu target={menu} onClose={() => actions.back()} />}
           {importing && (
             <div className="importBar" role="status">
