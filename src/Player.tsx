@@ -277,10 +277,17 @@ export function Player() {
         }).catch(() => {});
       }
     };
-    for (let i = 0; i < fresh.length; i++) {
-      batch.push(await readItem(fresh[i], addedAt + i));
-      setImporting({ done: i + 1, total: fresh.length });
-      if (batch.length >= 20) await flush();
+    // Process files in parallel batches. Awaiting each file one by one makes
+    // large libraries feel unnecessarily slow, especially when importing folders.
+    const importBatchSize = 50;
+    for (let start = 0; start < fresh.length; start += importBatchSize) {
+      const end = Math.min(start + importBatchSize, fresh.length);
+      const items = await Promise.all(
+        fresh.slice(start, end).map((entry, offset) => readItem(entry, addedAt + start + offset)),
+      );
+      batch.push(...items);
+      setImporting({ done: end, total: fresh.length });
+      await flush();
     }
     await flush();
     setImporting(null);
