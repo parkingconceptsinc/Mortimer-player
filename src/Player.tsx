@@ -997,3 +997,180 @@ export function Player() {
         })
       : null;
   }, [current?.id, current?.cover]);
+
+  useEffect(() => {
+    if ("mediaSession" in navigator) navigator.mediaSession.playbackState = playing ? "playing" : current ? "paused" : "none";
+  }, [playing, current?.id]);
+
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    const set = (action: MediaSessionAction, handler: MediaSessionActionHandler | null) => {
+      try { navigator.mediaSession.setActionHandler(action, handler); } catch {}
+    };
+    set("play", () => { if (mediaRef.current?.paused) actions.togglePlay(); });
+    set("pause", () => { if (!mediaRef.current?.paused) actions.togglePlay(); });
+    set("stop", () => { if (!mediaRef.current?.paused) actions.togglePlay(); });
+    set("previoustrack", () => actions.prev());
+    set("nexttrack", () => actions.next());
+    set("seekbackward", (d) => actions.seekBy(-(d.seekOffset ?? readPref("skipSeconds", 10))));
+    set("seekforward", (d) => actions.seekBy(d.seekOffset ?? readPref("skipSeconds", 10)));
+    set("seekto", (d) => { if (d.seekTime != null) actions.seek(d.seekTime); });
+  }, [actions]);
+
+  useEffect(() => {
+    if (!(playing && current?.kind === "video") || !navigator.wakeLock) return;
+    let sentinel: WakeLockSentinel | null = null;
+    let cancelled = false;
+    navigator.wakeLock.request("screen").then((s) => {
+      if (cancelled) void s.release();
+      else sentinel = s;
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
+      void sentinel?.release().catch(() => {});
+    };
+  }, [playing, current?.kind]);
+
+  useEffect(() => {
+    const onBeforeInstall = (event: BeforeInstallPromptEvent) => {
+      event.preventDefault();
+      setInstallEvent(event);
+    };
+    const onInstalled = () => {
+      setInstallEvent(null);
+      toast("App installed");
+    };
+    const onPop = () => {
+      if (pushedHistory.current > 0) pushedHistory.current--;
+      handlers.current.onBack();
+    };
+    const onHide = () => handlers.current.onPause();
+    window.addEventListener("beforeinstallprompt", onBeforeInstall);
+    window.addEventListener("appinstalled", onInstalled);
+    window.addEventListener("popstate", onPop);
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onBeforeInstall);
+      window.removeEventListener("appinstalled", onInstalled);
+      window.removeEventListener("popstate", onPop);
+      window.removeEventListener("pagehide", onHide);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (target?.closest("input, textarea, select, [contenteditable]")) return;
+      // Space/Enter on a focused control must activate that control, not toggle playback.
+      if ((event.key === " " || event.key === "Enter") && target?.closest("button, a, summary, [role=button], [role=switch]")) return;
+      const skip = readPref("skipSeconds", 10);
+      const handled: Record<string, () => void> = {
+        " ": () => actions.togglePlay(),
+        k: () => actions.togglePlay(),
+        ArrowRight: () => actions.seekBy(skip),
+        ArrowLeft: () => actions.seekBy(-skip),
+        l: () => actions.seekBy(skip),
+        j: () => actions.seekBy(-skip),
+        ArrowUp: () => actions.setVolume(readPref("volume", 1) + 0.05),
+        ArrowDown: () => actions.setVolume(readPref("volume", 1) - 0.05),
+        n: () => actions.next(),
+        p: () => actions.prev(),
+        m: () => actions.toggleMute(),
+        s: () => actions.toggleShuffle(),
+        r: () => actions.cycleRepeat(),
+        "[": () => actions.setSpeed(Math.round((readPref("speed", 1) - 0.1) * 100) / 100),
+        "]": () => actions.setSpeed(Math.round((readPref("speed", 1) + 0.1) * 100) / 100),
+        "=": () => actions.setSpeed(1),
+        f: () => {
+          const video = videoRef.current;
+          if (document.fullscreenElement) void document.exitFullscreen();
+          else if (video?.getAttribute("src")) void video.requestFullscreen?.().catch(() => {});
+        },
+      };
+      const run = handled[event.key];
+      if (!run) return;
+      event.preventDefault();
+      run();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [actions]);
+
+  const state: PlayerState = useMemo(() => ({
+    loaded, tracks, trackMap, queue, qIndex, queueSource, current, playing, shuffle, repeat, volume, muted, speed, preservePitch,
+    eq, customPresets, balance, boost, skipSeconds, resumePosition, videoFit, subtitleSize, showRemaining, accent, songSort,
+    favorites, videoProgress, comics, comicProgress, readerSettings, readerId: reader?.id ?? null, readerStart: reader?.start ?? null,
+    plays, lastPlayed, playlists, screen, routes, sleep, sleepRemaining: sleepRemaining == null ? null : Math.ceil(sleepRemaining),
+    ab, subtitles, importing, canInstall: !!installEvent, videoRef, actions,
+  }), [loaded, tracks, trackMap, queue, qIndex, queueSource, current, playing, shuffle, repeat, volume, muted, speed, preservePitch,
+    eq, customPresets, balance, boost, skipSeconds, resumePosition, videoFit, subtitleSize, showRemaining, accent, songSort,
+    favorites, videoProgress, comics, comicProgress, readerSettings, reader, plays, lastPlayed, playlists, screen, routes, sleep, sleepRemaining == null ? null : Math.ceil(sleepRemaining),
+    ab, subtitles, importing, installEvent, actions]);
+
+  const progress = useMemo(() => ({ currentTime, duration }), [currentTime, duration]);
+  const accentColor = ACCENTS[accent] ?? ACCENTS.Coral;
+
+  return (
+    <PlayerContext.Provider value={state}>
+      <ProgressContext.Provider value={progress}>
+        <div className={`shell screen-${screen}${current ? " hasCurrent" : ""}${screen === "player" && current?.kind === "video" ? " immersive" : ""}`} style={{ "--accent": accentColor } as CSSProperties}>
+          <aside className="sidebar">
+            <div className="brand">
+              <img className="logo" src={`${import.meta.env.BASE_URL}logo.png`} alt="Home" />
+            </div>
+            <nav>
+              {NAV.map(([id, label, , Icon]) => (
+                <button key={id} className={screen === id ? "active" : ""} onClick={() => actions.goTo(id)}>
+                  <Icon size={19} /><span>{label}</span>
+                  {id === "queue" && queue.length > 0 && <em>{queue.length}</em>}
+                </button>
+              ))}
+            </nav>
+            <div className="sidebarActions">
+              <button onClick={actions.importFolder}><FolderOpen size={17} /> Add folder</button>
+              <button onClick={actions.importFiles}><FilePlus size={17} /> Add files</button>
+              {installEvent && <button className="accent" onClick={actions.install}><Download size={17} /> Install app</button>}
+            </div>
+          </aside>
+
+          <main className="main">
+            <Library active={screen === "library"} />
+            <NowPlaying active={screen === "player"} />
+            {screen === "videos" && <Videos />}
+            {screen === "books" && <Comics shelfOverride="books" />}
+            {screen === "comics" && <Comics shelfOverride="comics" />}
+            {screen === "queue" && <Queue />}
+            {screen === "eq" && <Equalizer />}
+            {screen === "settings" && <Settings />}
+          </main>
+
+          <MiniPlayer />
+
+          <nav className="tabbar">
+            {NAV.filter((n) => n[4]).map(([id, , short, Icon]) => (
+              <button key={id} className={screen === id ? "active" : ""} onClick={() => actions.goTo(id)}>
+                <Icon size={21} /><span>{short}</span>
+                {id === "queue" && queue.length > 0 && <em>{queue.length > 99 ? "99+" : queue.length}</em>}
+              </button>
+            ))}
+          </nav>
+
+          {reader && (comics.find((c) => c.id === reader.id)?.format === "epub" ? <EpubReader key={reader.id} /> : <ComicReader key={reader.id} />)}
+          {menu && <TrackMenu target={menu} onClose={() => actions.back()} />}
+          {importing && (
+            <div className="importBar" role="status">
+              <span>{importing.total ? `${importing.label ?? "Importing"} ${importing.done} of ${importing.total}…` : `Scanning folder… ${importing.done} files found`}</span>
+              <i style={{ width: importing.total ? `${(importing.done / importing.total) * 100}%` : "15%" }} />
+            </div>
+          )}
+          {toastMessage && <div className="toast" role="status">{toastMessage}</div>}
+
+          <audio ref={audioRef} preload="auto" />
+          <input ref={fileInput} hidden type="file" multiple accept="audio/*,video/*,.flac,.mkv,.avi,.mov,.aac,.opus,.m4a,.wma,.cbz,.cbr,.pdf,.epub,application/pdf,application/epub+zip" onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
+          <input ref={folderInput} hidden type="file" multiple onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} {...({ webkitdirectory: "" } as InputHTMLAttributes<HTMLInputElement>)} />
+        </div>
+      </ProgressContext.Provider>
+    </PlayerContext.Provider>
+  );
+}
