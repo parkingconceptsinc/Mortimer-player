@@ -408,7 +408,7 @@ export function Player() {
             if (tags.cover && track.cover) URL.revokeObjectURL(track.cover);
             return { ...track, ...tags, cover };
           }));
-        }).catch(() => {});
+        });
       }
     };
     // Process files in parallel batches. Awaiting each file one by one makes
