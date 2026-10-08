@@ -256,10 +256,16 @@ export async function makeThumbnail(blob: Blob, width = 320): Promise<Blob | nul
     img.decoding = "async";
     img.src = url;
     await img.decode();
-    const scale = Math.min(1, width / img.naturalWidth);
+    const scale = Math.min(1, width / Math.max(1, img.naturalWidth));
+    const requestedWidth = img.naturalWidth * scale;
+    const requestedHeight = img.naturalHeight * scale;
+    const maxPixels = 1_500_000;
+    const pixelScale = requestedWidth * requestedHeight > maxPixels
+      ? Math.sqrt(maxPixels / (requestedWidth * requestedHeight))
+      : 1;
     const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
-    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    canvas.width = Math.max(1, Math.round(requestedWidth * pixelScale));
+    canvas.height = Math.max(1, Math.round(requestedHeight * pixelScale));
     canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height);
     return await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.8));
   } catch {
