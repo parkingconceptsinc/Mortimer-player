@@ -692,8 +692,19 @@ export function Player() {
     },
     onError() {
       if (!current) return;
+      const el = mediaRef.current;
+      const code = el?.error?.code;
+      const reason = code === MediaError.MEDIA_ERR_ABORTED
+        ? "playback was aborted"
+        : code === MediaError.MEDIA_ERR_NETWORK
+          ? "a network/read error occurred"
+          : code === MediaError.MEDIA_ERR_DECODE
+            ? "the video or its audio track could not be decoded"
+            : code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED
+              ? "the video or its audio format is not supported"
+              : "the media could not be played";
       setPlaying(false);
-      toast(`Can't play “${current.title}” — format not supported by this browser`);
+      toast(`Can't play “${current.title}” — ${reason}`);
       if (wantPlay.current && queue.length > 1 && errorStreak.current < Math.min(5, queue.length - 1)) {
         errorStreak.current++;
         window.setTimeout(() => actions.next(), 900);
