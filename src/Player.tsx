@@ -83,7 +83,10 @@ async function transcodeForBrowser(source: Blob, onProgress: (progress: number) 
     ]);
     if (code !== 0) throw new Error("FFmpeg could not transcode this file");
     const data = await ffmpeg.readFile(output);
-    return new Blob([data], { type: "video/mp4" });
+    const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
+    const buffer = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(buffer).set(bytes);
+    return new Blob([buffer], { type: "video/mp4" });
   } finally {
     ffmpeg.off("progress", progress);
     await ffmpeg.deleteFile(input).catch(() => {});
@@ -803,10 +806,11 @@ export function Player() {
             });
             const url = URL.createObjectURL(converted);
             transcodedUrls.set(id, url);
-            if (current.id === id && mediaRef.current === videoRef.current) {
-              videoRef.current.src = url;
-              videoRef.current.load();
-              if (wantPlay.current) startPlayback(videoRef.current);
+            const video = videoRef.current;
+            if (current.id === id && mediaRef.current === video && video) {
+              video.src = url;
+              video.load();
+              if (wantPlay.current) startPlayback(video);
             }
           } catch {
             if (current.id === id) toast("FFmpeg could not convert this video");
