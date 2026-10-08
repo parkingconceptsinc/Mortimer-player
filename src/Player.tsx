@@ -323,7 +323,7 @@ export function Player() {
           const path = `${prefix}/${entry.name}`;
           if (entry.kind === "file") {
             if ((supported(entry.name) || isComicFile(entry.name)) && entry.getFile) {
-              pending.push({ file: entry.getFile, path });
+              pending.push({ file: () => entry.getFile!(), path });
             }
           } else if (!entry.name.startsWith(".")) {
             await walk(entry as DirectoryHandleLike, path);
