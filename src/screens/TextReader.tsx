@@ -33,7 +33,7 @@ async function readDocument(file: Blob, format: string) {
   if (format === "html" || format === "htm") return "";
   if (format === "docx" || format === "odt") {
     const archive = unzipSync(new Uint8Array(await file.arrayBuffer()));
-    const target = format === "docx" ? "word/book.xml" : "content.xml";
+    const target = format === "docx" ? "word/document.xml" : "content.xml";
     const data = archive[target];
     if (!data) throw new Error("The document content could not be found.");
     return xmlToText(new TextDecoder().decode(data));
@@ -54,7 +54,7 @@ export function TextReader() {
   const url = useMemo(() => {
     if (!book || !/\\.(html|htm)$/i.test(book.name)) return null;
     return URL.createObjectURL(book.file);
-  }, [document?.id]);
+  }, [book?.id]);
 
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
 
@@ -71,12 +71,12 @@ export function TextReader() {
       if (!cancelled) setError(e.message || "Couldn't open this book.");
     });
     return () => { cancelled = true; };
-  }, [document?.id]);
+  }, [book?.id]);
 
   useEffect(() => {
     if (!book || !bodyRef.current) return;
     bodyRef.current.scrollTop = 0;
-  }, [document?.id]);
+  }, [book?.id]);
 
   useEffect(() => {
     if (!book) return;
@@ -92,14 +92,14 @@ export function TextReader() {
     };
     root.addEventListener("scroll", onScroll, { passive: true });
     return () => root.removeEventListener("scroll", onScroll);
-  }, [document?.id, actions, ready]);
+  }, [book?.id, actions, ready]);
 
   useEffect(() => {
     if (!book) return;
-    const onChange = () => setFullscreen(!!book.fullscreenElement);
-    book.addEventListener("fullscreenchange", onChange);
-    return () => book.removeEventListener("fullscreenchange", onChange);
-  }, [document]);
+    const onChange = () => setFullscreen(!!globalThis.document.fullscreenElement);
+    globalThis.document.addEventListener("fullscreenchange", onChange);
+    return () => globalThis.document.removeEventListener("fullscreenchange", onChange);
+  }, [book?.id]);
 
   useEffect(() => {
     if (!book) return;
@@ -108,11 +108,10 @@ export function TextReader() {
   }, [document?.id]);
 
   const toggleFullscreen = () => {
-    const root = document?.body;
-    if (!root) return;
     const host = bodyRef.current?.parentElement;
-    if (globalThis.book.fullscreenElement) void globalThis.book.exitFullscreen().catch(() => {});
-    else void host?.requestFullscreen?.().catch(() => {});
+    if (!host) return;
+    if (globalThis.document.fullscreenElement) void globalThis.document.exitFullscreen().catch(() => {});
+    else void host.requestFullscreen?.().catch(() => {});
   };
 
   if (!book) return null;
