@@ -335,13 +335,21 @@ export function Player() {
     setImporting({ done: 0, total: totalToAdd, label: "Adding" });
 
     if (freshComics.length) {
-      const items: StoredComic[] = freshComics.map(({ file, path }, i) => ({
-        id: crypto.randomUUID(), name: file.name, path, size: file.size, lastModified: file.lastModified, addedAt: addedAt + i, format: comicFormatOf(file.name), shelf: defaultShelf(comicFormatOf(file.name)), file,
-      }));
-      try { await saveComics(items); } catch { comicStorageOk = false; }
-      setComics((old) => [...old, ...items.map(toComic)]);
-      processed += items.length;
-      setImporting({ done: processed, total: totalToAdd, label: "Adding" });
+      const comicBatchSize = 50;
+      for (let start = 0; start < freshComics.length; start += comicBatchSize) {
+        const end = Math.min(start + comicBatchSize, freshComics.length);
+        const items: StoredComic[] = freshComics.slice(start, end).map(({ file, path }, offset) => ({
+          id: crypto.randomUUID(), name: file.name, path, size: file.size, lastModified: file.lastModified,
+          addedAt: addedAt + start + offset, format: comicFormatOf(file.name), shelf: defaultShelf(comicFormatOf(file.name)), file,
+        }));
+        if (comicStorageOk) {
+          try { await saveComics(items); } catch { comicStorageOk = false; }
+        }
+        setComics((old) => [...old, ...items.map(toComic)]);
+        processed += items.length;
+        setImporting({ done: processed, total: totalToAdd, label: "Adding" });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
     }
     let batch: StoredLibraryItem[] = [];
     const flush = async () => {
