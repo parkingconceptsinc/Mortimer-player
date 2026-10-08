@@ -11,7 +11,7 @@ export function Queue() {
   const [limit, setLimit] = useState(200);
   const activeRow = useRef<HTMLDivElement | null>(null);
   const entries = queue.map((id, index) => ({ index, track: trackMap.get(id) })).filter((e): e is { index: number; track: Track } => !!e.track);
-  const remaining = entries.slice(qIndex + 1).reduce((sum, e) => sum + (e.track.duration ?? 0), 0);
+  const remaining = entries.filter((e) => e.index > qIndex).reduce((sum, e) => sum + (e.track.duration ?? 0), 0);
 
   useEffect(() => {
     if (qIndex + 50 > limit) setLimit(qIndex + 200);
