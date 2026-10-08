@@ -102,6 +102,7 @@ export function ComicReader() {
 
   useEffect(() => {
     if (!source) return;
+    let cancelled = false;
     const ahead = vertical ? 4 : s.mode === "double" ? 5 : 3;
     const wanted: number[] = [];
     for (let i = page - 2; i <= page + ahead; i++) if (i >= 0 && i < source.pages) wanted.push(i);
@@ -111,6 +112,7 @@ export function ComicReader() {
       loading.current.add(i);
       source.getPage(i).then((blob) => {
         loading.current.delete(i);
+        if (cancelled) return;
         const url = URL.createObjectURL(blob);
         const next = new Map(urlsRef.current);
         next.set(i, url);
@@ -124,9 +126,12 @@ export function ComicReader() {
         setUrls(next);
       }).catch(() => {
         loading.current.delete(i);
-        setFailed((f) => new Set(f).add(i));
+        if (!cancelled) setFailed((f) => new Set(f).add(i));
       });
     }
+    return () => {
+      cancelled = true;
+    };
   }, [source, page, s.mode, vertical]);
 
   useEffect(() => {
