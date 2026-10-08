@@ -1099,7 +1099,7 @@ export function Player() {
       }
       if (duplicateIds.length) void deleteTracks(duplicateIds).catch(() => {});
       if (repaired.length) void Promise.all(repaired.map((item) => {
-        const { id, ...patch } = item;
+        const { id, file: _file, ...patch } = item;
         return patchTrack(id, patch).catch(() => {});
       }));
       const restored = [...uniqueStored.values()].map(toTrack).sort((a, b) => a.addedAt - b.addedAt);
@@ -1146,7 +1146,7 @@ export function Player() {
       }
       if (duplicateIds.length) void deleteComics(duplicateIds).catch(() => {});
       if (repaired.length) void Promise.all(repaired.map((item) => {
-        const { id, ...patch } = item;
+        const { id, file: _file, ...patch } = item;
         return patchComic(id, patch).catch(() => {});
       }));
       if (!cancelled) setComics([...uniqueStored.values()].map(toComic).sort((a, b) => a.addedAt - b.addedAt));
