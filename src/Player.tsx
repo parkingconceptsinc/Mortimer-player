@@ -1131,11 +1131,19 @@ export function Player() {
     void captureVideoFrame(next.url).then(({ image, duration: d }) => {
       thumbBusy.current = false;
       const newDuration = !next.duration && d ? d : undefined;
-      if (image || newDuration) {
+      setTracks((old) => {
+        const live = old.find((t) => t.id === next.id);
+        if (!live) return old;
         const cover = image ? URL.createObjectURL(image) : undefined;
-        setTracks((old) => old.map((t) => (t.id === next.id ? { ...t, cover: cover ?? t.cover, duration: t.duration ?? newDuration } : t)));
-        void patchTrack(next.id, { ...(image ? { cover: image } : {}), ...(newDuration ? { duration: newDuration } : {}) }).catch(() => {});
-      }
+        if (cover && live.cover) URL.revokeObjectURL(live.cover);
+        if (cover || newDuration) {
+          void patchTrack(next.id, { ...(image ? { cover: image } : {}), ...(newDuration ? { duration: newDuration } : {}) }).catch(() => {});
+        }
+        return cover || newDuration ? old.map((t) => (t.id === next.id ? { ...t, cover: cover ?? t.cover, duration: t.duration ?? newDuration } : t)) : old;
+      });
+      setThumbTick((n) => n + 1);
+    }).catch(() => {
+      thumbBusy.current = false;
       setThumbTick((n) => n + 1);
     });
   }, [tracks, screen, thumbTick]);
@@ -1157,16 +1165,24 @@ export function Player() {
           if (epub.cover) image = await makeThumbnail(epub.cover, 360);
         } else if (next.format === "cbz" || next.format === "cbr" || next.format === "pdf") {
           const source = await openComic(next.file, undefined, { firstPageOnly: true });
-          pages = source.pages;
-          if (!next.cover) image = await makeThumbnail(await source.getPage(0), 360);
-          source.close();
+          try {
+            pages = source.pages;
+            if (!next.cover) image = await makeThumbnail(await source.getPage(0), 360);
+          } finally {
+            source.close();
+          }
         }
       } catch {}
       comicBusy.current = false;
       if (pages || image || info.title || info.author) {
-        const cover = image ? URL.createObjectURL(image) : undefined;
-        setComics((old) => old.map((c) => (c.id === next.id ? { ...c, cover: cover ?? c.cover, pages: pages ?? c.pages, title: info.title ?? c.title, author: info.author ?? c.author } : c)));
-        void patchComic(next.id, Object.fromEntries(Object.entries({ cover: image ?? undefined, pages, title: info.title, author: info.author }).filter(([, v]) => v !== undefined))).catch(() => {});
+        setComics((old) => {
+          const live = old.find((c) => c.id === next.id);
+          if (!live) return old;
+          const cover = image ? URL.createObjectURL(image) : undefined;
+          if (cover && live.cover) URL.revokeObjectURL(live.cover);
+          void patchComic(next.id, Object.fromEntries(Object.entries({ cover: image ?? undefined, pages, title: info.title, author: info.author }).filter(([, v]) => v !== undefined))).catch(() => {});
+          return old.map((c) => (c.id === next.id ? { ...c, cover: cover ?? c.cover, pages: pages ?? c.pages, title: info.title ?? c.title, author: info.author ?? c.author } : c));
+        });
       }
       setThumbTick((n) => n + 1);
     })();
