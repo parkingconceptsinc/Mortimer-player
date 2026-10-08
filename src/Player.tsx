@@ -62,17 +62,22 @@ function enqueueFfmpeg<T>(task: () => Promise<T>) {
 const metadataQueue: Array<() => Promise<void>> = [];
 let metadataPump: Promise<void> | null = null;
 
-function enqueueMetadata(task: () => Promise<void>) {
-  metadataQueue.push(task);
-  metadataPump ??= (async () => {
+function startMetadataPump() {
+  if (metadataPump) return;
+  metadataPump = (async () => {
     while (metadataQueue.length) {
       const batch = metadataQueue.splice(0, 4);
       await Promise.allSettled(batch.map((job) => job()));
     }
   })().finally(() => {
     metadataPump = null;
-    if (metadataQueue.length) enqueueMetadata(async () => {});
+    if (metadataQueue.length) startMetadataPump();
   });
+}
+
+function enqueueMetadata(task: () => Promise<void>) {
+  metadataQueue.push(task);
+  startMetadataPump();
 }
 
 function shouldTranscodeVideo(name: string) {
