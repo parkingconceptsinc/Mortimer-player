@@ -51,6 +51,19 @@ const ffmpeg = new FFmpeg();
 let ffmpegLoad: Promise<void> | null = null;
 const transcodedUrls = new Map<string, string>();
 const transcoding = new Set<string>();
+
+function revokeTranscoded(ids?: Iterable<string>) {
+  if (!ids) {
+    revokeTranscoded();
+    return;
+  }
+  for (const id of ids) {
+    const url = transcodedUrls.get(id);
+    if (!url) continue;
+    URL.revokeObjectURL(url);
+    transcodedUrls.delete(id);
+  }
+}
 let ffmpegQueue: Promise<unknown> = Promise.resolve();
 
 function enqueueFfmpeg<T>(task: () => Promise<T>) {
@@ -490,6 +503,7 @@ export function Player() {
     }
     setQueue(nextQueue);
     setOriginalQueue((q) => q && q.filter((id) => !gone.has(id)));
+    revokeTranscoded(gone);
     setTracks((old) => {
       for (const t of old) {
         if (!gone.has(t.id)) continue;
@@ -664,6 +678,7 @@ export function Player() {
     removeFromLibrary,
     clearLibrary() {
       clearQueue();
+      revokeTranscoded();
       setTracks((old) => {
         for (const t of old) {
           URL.revokeObjectURL(t.url);
