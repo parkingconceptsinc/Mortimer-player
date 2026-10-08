@@ -973,7 +973,7 @@ export function Player() {
       const el = event.currentTarget as HTMLMediaElement;
       if (el !== mediaRef.current) return;
       switch (event.type) {
-        case "play":
+        case "play": {
           setPlaying(true);
           resumeEngine();
           const item = currentRef.current;
@@ -985,14 +985,16 @@ export function Player() {
               if (mediaRef.current !== video || live?.id !== id || video.paused || video.currentTime < 0.75) return;
               if (transcodedUrls.has(id) || video.currentSrc !== live.url) return;
               const decoded = (video as HTMLVideoElement & { webkitAudioDecodedByteCount?: number }).webkitAudioDecodedByteCount;
-              const nameLooksProblematic = /.(mkv|avi|3gp|ts|m2ts|mts|vob|wmv|asf|flv|f4v|rmvb|rm)$/i.test(live.name)
+              const nameLooksProblematic = /\.(mkv|avi|3gp|ts|m2ts|mts|vob|wmv|asf|flv|f4v|rmvb|rm)$/i.test(live.name)
                 || /\b(?:x265|x264|h[ ._-]?265|hevc|ac3|e[ ._-]?ac3|ddp|dd\+|dts)\b/i.test(live.name);
               // Some browsers keep playing the video track while silently dropping
               // an unsupported audio codec. Convert the original source before
               // treating it as a real playback error.
               if (nameLooksProblematic || decoded === 0) requestMediaTranscode(live, "video");
             }, 1400);
-          }          break;
+          }
+          break;
+        }
         case "pause":
           window.clearTimeout(videoAudioProbeTimer.current);
           setPlaying(false);
