@@ -976,7 +976,23 @@ export function Player() {
     let cancelled = false;
     const restoreMusic = loadLibrary().then((stored) => {
       if (cancelled) return;
-      const restored = stored.map(toTrack).sort((a, b) => a.addedAt - b.addedAt);
+      const uniqueStored = new Map<string, StoredLibraryItem>();
+      const duplicateIds: string[] = [];
+      for (const item of stored) {
+        const key = trackKey(item.path, item.size, item.lastModified);
+        const previous = uniqueStored.get(key);
+        if (previous) {
+          duplicateIds.push(item.id);
+          if ((item.addedAt ?? 0) < (previous.addedAt ?? 0)) {
+            duplicateIds[duplicateIds.length - 1] = previous.id;
+            uniqueStored.set(key, item);
+          }
+        } else {
+          uniqueStored.set(key, item);
+        }
+      }
+      if (duplicateIds.length) void deleteTracks(duplicateIds).catch(() => {});
+      const restored = [...uniqueStored.values()].map(toTrack).sort((a, b) => a.addedAt - b.addedAt);
       const ids = new Set(restored.map((t) => t.id));
       const savedQueue = readPref<string[]>("queue", []);
       const savedIndex = readPref("qIndex", 0);
@@ -992,7 +1008,23 @@ export function Player() {
       if (!cancelled) toast("Local music storage is unavailable in this browser");
     });
     const restoreBooks = loadComics().then((stored) => {
-      if (!cancelled) setComics(stored.map(toComic).sort((a, b) => a.addedAt - b.addedAt));
+      const uniqueStored = new Map<string, StoredComic>();
+      const duplicateIds: string[] = [];
+      for (const item of stored) {
+        const key = trackKey(item.path, item.size, item.lastModified);
+        const previous = uniqueStored.get(key);
+        if (previous) {
+          duplicateIds.push(item.id);
+          if (item.addedAt < previous.addedAt) {
+            duplicateIds[duplicateIds.length - 1] = previous.id;
+            uniqueStored.set(key, item);
+          }
+        } else {
+          uniqueStored.set(key, item);
+        }
+      }
+      if (duplicateIds.length) void deleteComics(duplicateIds).catch(() => {});
+      if (!cancelled) setComics([...uniqueStored.values()].map(toComic).sort((a, b) => a.addedAt - b.addedAt));
     }).catch(() => {
       if (!cancelled) toast("Local books and comics storage is unavailable in this browser");
     });
