@@ -54,7 +54,8 @@ const transcoding = new Set<string>();
 
 function revokeTranscoded(ids?: Iterable<string>) {
   if (!ids) {
-    revokeTranscoded();
+    for (const url of transcodedUrls.values()) URL.revokeObjectURL(url);
+    transcodedUrls.clear();
     return;
   }
   for (const id of ids) {
@@ -408,12 +409,13 @@ export function Player() {
         enqueueMetadata(async () => {
           const tags = await readTags(item.file, item.name);
           if (libraryStorageOk) await patchTrack(item.id, tags).catch(() => {});
-          setTracks((old) => old.map((track) => {
-            if (track.id !== item.id) return track;
-            const cover = tags.cover ? URL.createObjectURL(tags.cover) : track.cover;
-            if (tags.cover && track.cover) URL.revokeObjectURL(track.cover);
-            return { ...track, ...tags, cover };
-          }));
+          setTracks((old) => {
+            const live = old.find((track) => track.id === item.id);
+            if (!live) return old;
+            const cover = tags.cover ? URL.createObjectURL(tags.cover) : live.cover;
+            if (tags.cover && live.cover) URL.revokeObjectURL(live.cover);
+            return old.map((track) => (track.id === item.id ? { ...track, ...tags, cover } : track));
+          });
         });
       }
     };
@@ -842,7 +844,11 @@ export function Player() {
           if (wantPlay.current) startPlayback(el);
         }
       } catch {
-        if (current?.id === id) toast(mode === "audio" ? "FFmpeg could not convert this audio" : "FFmpeg could not convert this video");
+        if (current?.id === id) {
+          wantPlay.current = false;
+          setPlaying(false);
+          toast(mode === "audio" ? "FFmpeg could not convert this audio" : "FFmpeg could not convert this video");
+        }
       } finally {
         transcoding.delete(id);
         if (current?.id === id) setImporting(null);
@@ -908,17 +914,14 @@ export function Player() {
       advance(1, true);
     },
     onError() {
-      if (!current) return;
       const el = mediaRef.current;
-      if (current.kind === "video" && !transcodedUrls.has(current.id)) {
-        requestMediaTranscode(current, "video");
+      if (!current || !el) return;
+      if (loadedTrack.current?.id !== current.id) return;
+      const code = el.error?.code;
+      if ((code === MediaError.MEDIA_ERR_DECODE || code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) && !transcodedUrls.has(current.id) && !transcoding.has(current.id)) {
+        requestMediaTranscode(current, current.kind);
         return;
       }
-      if (current.kind === "audio" && !transcodedUrls.has(current.id)) {
-        requestMediaTranscode(current, "audio");
-        return;
-      }
-      const code = el?.error?.code;
       const reason = code === MediaError.MEDIA_ERR_ABORTED
         ? "playback was aborted"
         : code === MediaError.MEDIA_ERR_NETWORK
