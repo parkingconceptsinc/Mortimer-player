@@ -359,10 +359,11 @@ export function Player() {
           id: crypto.randomUUID(), name: file.name, path, size: file.size, lastModified: file.lastModified,
           addedAt: addedAt + start + offset, format: comicFormatOf(file.name), shelf: defaultShelf(comicFormatOf(file.name)), file,
         }));
+        let savedItems = items;
         if (comicStorageOk) {
-          try { await saveComics(items); } catch { comicStorageOk = false; }
+          try { savedItems = await saveComics(items); } catch { comicStorageOk = false; }
         }
-        setComics((old) => [...old, ...items.map(toComic)]);
+        if (savedItems.length) setComics((old) => [...old, ...savedItems.map(toComic)]);
         processed += items.length;
         setImporting({ done: processed, total: totalToAdd, label: "Adding" });
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -373,14 +374,15 @@ export function Player() {
       const items = batch;
       batch = [];
       if (!items.length) return;
+      let savedItems = items;
       if (libraryStorageOk) {
-        try { await saveLibrary(items); } catch { libraryStorageOk = false; }
+        try { savedItems = await saveLibrary(items); } catch { libraryStorageOk = false; }
       }
-      setTracks((old) => [...old, ...items.map(toTrack)]);
+      if (savedItems.length) setTracks((old) => [...old, ...savedItems.map(toTrack)]);
 
       // Enrich audio metadata in the background. This must not delay adding
       // the actual file to the library.
-      for (const item of items) {
+      for (const item of savedItems) {
         if (item.kind !== "audio") continue;
         enqueueMetadata(async () => {
           const tags = await readTags(item.file, item.name);
