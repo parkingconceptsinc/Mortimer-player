@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type InputHTMLAttributes } from "react";
+import { FFmpeg } from "@ffmpeg/ffmpeg";
+import { fetchFile, toBlobURL } from "@ffmpeg/util";
 import { BookOpen, Clapperboard, Disc3, Download, FilePlus, FolderOpen, Library as LibraryIcon, ListMusic, Settings as SettingsIcon, SlidersHorizontal, type LucideIcon } from "lucide-react";
 import { applyAudio, attachElement, EQ_PRESETS, initEngine, resumeEngine } from "./audioEngine";
 import { PlayerContext, ProgressContext, type Actions, type MenuTarget, type PlayerState, type SleepState } from "./context";
@@ -41,6 +43,53 @@ type DirectoryEntry = { kind: "file" | "directory"; name: string; getFile?: () =
 type DirectoryHandleLike = { name: string; values: () => AsyncIterable<DirectoryEntry> };
 
 const MEDIA_EVENTS = ["play", "pause", "timeupdate", "loadedmetadata", "durationchange", "ended", "error"] as const;
+
+// Browser HEVC/AC-3/DTS support varies by platform. When native playback fails,
+// use a local FFmpeg WASM fallback to produce H.264/AAC MP4 entirely in-browser.
+const ffmpeg = new FFmpeg();
+let ffmpegLoad: Promise<void> | null = null;
+const transcodedUrls = new Map<string, string>();
+const transcoding = new Set<string>();
+
+async function transcodeForBrowser(source: Blob, onProgress: (progress: number) => void): Promise<Blob> {
+  if (!ffmpeg.loaded) {
+    ffmpegLoad ??= (async () => {
+      const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
+      await ffmpeg.load({
+        coreURL: await toBlobURL(baseURL + "/ffmpeg-core.js", "text/javascript"),
+        wasmURL: await toBlobURL(baseURL + "/ffmpeg-core.wasm", "application/wasm"),
+      });
+    })();
+    await ffmpegLoad;
+  }
+  const input = "mortimer-input.mkv";
+  const output = "mortimer-output.mp4";
+  const progress = ({ progress }: { progress: number }) => onProgress(Math.max(0, Math.min(1, progress)));
+  ffmpeg.on("progress", progress);
+  try {
+    await ffmpeg.writeFile(input, await fetchFile(source));
+    const code = await ffmpeg.exec([
+      "-i", input,
+      "-map", "0:v:0",
+      "-map", "0:a:0?",
+      "-c:v", "libx264",
+      "-preset", "ultrafast",
+      "-crf", "23",
+      "-pix_fmt", "yuv420p",
+      "-c:a", "aac",
+      "-b:a", "192k",
+      "-movflags", "+faststart",
+      "-y", output,
+    ]);
+    if (code !== 0) throw new Error("FFmpeg could not transcode this file");
+    const data = await ffmpeg.readFile(output);
+    return new Blob([data], { type: "video/mp4" });
+  } finally {
+    ffmpeg.off("progress", progress);
+    await ffmpeg.deleteFile(input).catch(() => {});
+    await ffmpeg.deleteFile(output).catch(() => {});
+  }
+}
 
 export function Player() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -738,6 +787,36 @@ export function Player() {
     onError() {
       if (!current) return;
       const el = mediaRef.current;
+      if (current.kind === "video" && !transcodedUrls.has(current.id) && !transcoding.has(current.id)) {
+        const id = current.id;
+        const sourceUrl = current.url;
+        transcoding.add(id);
+        setImporting({ done: 0, total: 100, label: "Converting video for browser" });
+        void (async () => {
+          try {
+            const source = await fetch(sourceUrl).then((response) => {
+              if (!response.ok) throw new Error("Could not read the video");
+              return response.blob();
+            });
+            const converted = await transcodeForBrowser(source, (progress) => {
+              if (current.id === id) setImporting({ done: Math.round(progress * 100), total: 100, label: "Converting video for browser" });
+            });
+            const url = URL.createObjectURL(converted);
+            transcodedUrls.set(id, url);
+            if (current.id === id && mediaRef.current === videoRef.current) {
+              videoRef.current.src = url;
+              videoRef.current.load();
+              if (wantPlay.current) startPlayback(videoRef.current);
+            }
+          } catch {
+            if (current.id === id) toast("FFmpeg could not convert this video");
+          } finally {
+            transcoding.delete(id);
+            if (current.id === id) setImporting(null);
+          }
+        })();
+        return;
+      }
       const code = el?.error?.code;
       const reason = code === MediaError.MEDIA_ERR_ABORTED
         ? "playback was aborted"
@@ -853,7 +932,7 @@ export function Player() {
     }
     setCurrentTime(pendingSeek.current ?? 0);
     setDuration(current.duration ?? 0);
-    el.src = current.url;
+    el.src = current.kind === "video" ? (transcodedUrls.get(current.id) ?? current.url) : current.url;
     el.defaultPlaybackRate = speed;
     el.playbackRate = speed;
     el.preservesPitch = preservePitch;
