@@ -6,11 +6,22 @@ export function readPref<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(PREFIX + key);
     if (raw == null) return fallback;
-    const value = JSON.parse(raw) as T;
-    if (fallback && typeof fallback === "object" && !Array.isArray(fallback) && value && typeof value === "object") {
-      return { ...fallback, ...value };
+    const value: unknown = JSON.parse(raw);
+
+    if (Array.isArray(fallback)) return (Array.isArray(value) ? value : fallback) as T;
+    if (fallback === null) {
+      return (value === null || (typeof value === "object" && value !== null)) ? value as T : fallback;
     }
-    return value;
+    switch (typeof fallback) {
+      case "boolean": return (typeof value === "boolean" ? value : fallback) as T;
+      case "number": return (typeof value === "number" && Number.isFinite(value) ? value : fallback) as T;
+      case "string": return (typeof value === "string" ? value : fallback) as T;
+    }
+    if (typeof fallback === "object") {
+      if (value && typeof value === "object" && !Array.isArray(value)) return { ...fallback, ...value } as T;
+      return fallback;
+    }
+    return value as T;
   } catch {
     return fallback;
   }
