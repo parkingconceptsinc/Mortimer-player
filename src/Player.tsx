@@ -862,8 +862,8 @@ export function Player() {
             videoAudioProbeTimer.current = window.setTimeout(() => {
               if (mediaRef.current !== video || current?.id !== id || video.paused || video.currentTime < 0.75) return;
               const decoded = (video as HTMLVideoElement & { webkitAudioDecodedByteCount?: number }).webkitAudioDecodedByteCount;
-              const nameLooksProblematic = /\\.(mkv|avi|3gp)$/i.test(current.name)
-                || /\\b(?:x265|x264|h[ ._-]?265|hevc|ac3|e[ ._-]?ac3|dts)\\b/i.test(current.name);
+              const nameLooksProblematic = /\.(mkv|avi|3gp)$/i.test(current.name)
+                || /\b(?:x265|x264|h[ ._-]?265|hevc|ac3|e[ ._-]?ac3|ddp|dd\+|dts)\b/i.test(current.name);
               // Some browsers keep playing the video track while silently dropping
               // an unsupported audio codec. In Chromium, zero decoded audio bytes
               // after playback has started is a strong signal for that case.
