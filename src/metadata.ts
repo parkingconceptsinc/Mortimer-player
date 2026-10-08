@@ -46,5 +46,14 @@ export async function readItem({ file, path }: Incoming, addedAt: number): Promi
     addedAt,
     metaVersion: META_VERSION,
   };
-  return kind === "audio" ? { ...item, ...(await readTags(file, file.name)) } : item;
+  if (kind !== "audio") return item;
+
+  // Tag parsing must never block the import indefinitely. Some large or unusual
+  // audio files can make music-metadata take a long time in the browser; the
+  // track itself should still enter the library and can be enriched later.
+  const tags = await Promise.race([
+    readTags(file, file.name),
+    new Promise<Tags>((resolve) => window.setTimeout(() => resolve({ title: stripExt(file.name) }), 4000)),
+  ]);
+  return { ...item, ...tags };
 }
