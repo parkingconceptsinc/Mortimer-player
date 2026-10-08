@@ -217,7 +217,10 @@ export function Player() {
       gain.connect(decoded.context.destination);
       codecAudioRef.current = { ...decoded, id: item.id, source: null, gain, startedAt: decoded.context.currentTime, offset: el.currentTime };
       el.muted = true;
-      if (!el.paused) startCodecAudio(el.currentTime);
+      if (el.error && el.getAttribute("src")) {
+        el.load();
+        if (wantPlay.current) startPlayback(el);
+      } else if (!el.paused) startCodecAudio(el.currentTime);
       toast("Using the original video audio codec");
       return true;
     } catch {
@@ -523,6 +526,7 @@ export function Player() {
       const el = mediaRef.current;
       if (!el || !Number.isFinite(time)) return;
       el.currentTime = Math.max(0, Math.min(time, el.duration || time));
+      if (el === videoRef.current && codecAudioRef.current?.id === current?.id) startCodecAudio(el.currentTime);
       setCurrentTime(el.currentTime);
     },
     seekBy(delta) {
