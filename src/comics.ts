@@ -280,7 +280,6 @@ async function openPdf(file: Blob): Promise<ComicSource> {
     pages: doc.numPages,
     getPage: renderPage,
     close() {
-      void doc.destroy().catch(() => {});
       void task.destroy().catch(() => {});
     },
   };
