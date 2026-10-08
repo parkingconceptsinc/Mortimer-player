@@ -5,6 +5,7 @@ import { Art, ScreenHeader, Sheet, SheetItem } from "../components";
 import { usePref } from "../prefs";
 import type { Comic, ComicSort, Shelf } from "../types";
 import { compareText, formatSize } from "../util";
+import { isTextFormat } from "../comics";
 
 const seriesName = (path: string) => (path ? path.slice(path.lastIndexOf("/") + 1) : "Other");
 
@@ -42,7 +43,7 @@ export function Comics({ shelfOverride }: { shelfOverride?: Shelf }) {
     if (!p) return { pct: 0, label: c.pages ? `${c.pages} pages` : c.format.toUpperCase() };
     if (p.page >= p.pages - 1) return { pct: 100, label: "Read" };
     const pct = ((p.page + 1) / p.pages) * 100;
-    return { pct, label: c.format === "epub" ? `${Math.max(1, Math.round(pct))}% read` : `Page ${p.page + 1} of ${p.pages}` };
+    return { pct, label: c.format === "epub" || isTextFormat(c.format) ? `${Math.max(1, Math.round(pct))}% read` : `Page ${p.page + 1} of ${p.pages}` };
   };
 
   return (
@@ -56,12 +57,12 @@ export function Comics({ shelfOverride }: { shelfOverride?: Shelf }) {
         <div className="emptyState welcome">
           <div className="heroDisc"><BookText /></div>
           <h2>Your bookshelf</h2>
-          <p>Add EPUB and PDF books. Choose the text size, font and theme (dark, sepia or light), jump through the table of contents and pick up exactly where you left off.</p>
+          <p>Add EPUB, PDF, DOCX, ODT and text-based books. HTML can be viewed as a document, while TXT, Markdown, RTF and common data/config files open in a clean text reader.</p>
           <div className="heroActions">
             <button className="btn primary" onClick={actions.importFolder}><FolderOpen size={18} /> Add books folder</button>
             <button className="btn" onClick={actions.importFiles}><FilePlus size={18} /> Add files</button>
           </div>
-          <small>PDFs land here; move any of them to Comics from its menu.</small>
+          <small>PDF, EPUB, DOCX, ODT, TXT, Markdown, HTML and other text documents are supported here.</small>
         </div>
       ) : !comics.length ? (
         <div className="emptyState welcome">
