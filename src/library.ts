@@ -79,9 +79,42 @@ async function withStore<T>(mode: IDBTransactionMode, run: (store: IDBObjectStor
   }
 }
 
-export async function saveLibrary(items: StoredLibraryItem[]) {
-  if (!items.length) return;
-  await withStore("readwrite", (store) => { for (const item of items) store.put(item); });
+async function saveUniqueItems<T extends { id: string; path: string; size: number; lastModified: number }>(
+  storeName: string,
+  items: T[],
+  keyOf: (item: T) => string,
+): Promise<T[]> {
+  const db = await openDB();
+  try {
+    return await new Promise<T[]>((resolve, reject) => {
+      const tx = db.transaction(storeName, "readwrite");
+      const store = tx.objectStore(storeName);
+      const get = store.getAll();
+      get.onerror = () => reject(get.error);
+      get.onsuccess = () => {
+        const existing = new Set((get.result as T[]).map(keyOf));
+        const unique: T[] = [];
+        const seen = new Set(existing);
+        for (const item of items) {
+          const key = keyOf(item);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          unique.push(item);
+          store.put(item);
+        }
+        tx.oncomplete = () => resolve(unique);
+      };
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error ?? new Error("Library transaction aborted"));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+export async function saveLibrary(items: StoredLibraryItem[]): Promise<StoredLibraryItem[]> {
+  if (!items.length) return [];
+  return await saveUniqueItems(STORE, items, (item) => `${item.path}|${item.size}|${item.lastModified}`);
 }
 
 export async function loadLibrary(): Promise<StoredLibraryItem[]> {
@@ -125,9 +158,9 @@ export async function clearLibrary() {
   }
 }
 
-export async function saveComics(items: StoredComic[]) {
-  if (!items.length) return;
-  await withStore("readwrite", (store) => { for (const item of items) store.put(item); }, COMICS);
+export async function saveComics(items: StoredComic[]): Promise<StoredComic[]> {
+  if (!items.length) return [];
+  return await saveUniqueItems(COMICS, items, (item) => `${item.path}|${item.size}|${item.lastModified}`);
 }
 
 export async function loadComics(): Promise<StoredComic[]> {
