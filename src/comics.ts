@@ -24,7 +24,7 @@ export function toComic(x: StoredComic): Comic {
     title: x.title || comicTitle(x.name),
     author: x.author,
     // Items saved before shelves existed were all on the comics shelf; keep them there.
-    shelf: x.shelf ?? (x.format === "epub" ? "books" : "comics"),
+    shelf: x.shelf ?? defaultShelf(x.format),
     path: x.path,
     folder: folderOf(x.path),
     size: x.size,
