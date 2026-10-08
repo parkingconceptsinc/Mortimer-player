@@ -112,6 +112,8 @@ export function EpubReader() {
     let cancelled = false;
     let book: Book | null = null;
     setReady(false);
+    setLocationsReady(false);
+    setShowEnd(false);
     void (async () => {
       book = await openEpub(comic.file);
       if (cancelled) return book.destroy();
