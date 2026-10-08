@@ -180,10 +180,16 @@ export function Player() {
     void state.context.close().catch(() => {});
   }
 
+  function codecAudioTime() {
+    const state = codecAudioRef.current;
+    if (!state) return null;
+    return Math.max(0, Math.min(state.buffer.duration, state.offset + (state.context.currentTime - state.startedAt) * speed));
+  }
+
   function startCodecAudio(offset: number) {
     const state = codecAudioRef.current;
-    const video = videoRef.current;
-    if (!state || !video || state.id !== current?.id) return;
+    const el = mediaRef.current;
+    if (!state || !el || state.id !== current?.id) return;
     const safeOffset = Math.max(0, Math.min(offset, Math.max(0, state.buffer.duration - 0.01)));
     try { state.source?.stop(); } catch {}
     state.source?.disconnect();
@@ -199,12 +205,12 @@ export function Player() {
   }
 
   async function activateCodecAudio(item: Track, el: HTMLMediaElement) {
-    if (item.kind !== "video" || el !== videoRef.current) return false;
+    if (el !== mediaRef.current || (item.kind === "video" ? el !== videoRef.current : el !== audioRef.current)) return false;
     if (codecFallbackBusy.current === item.id) return false;
     if (codecFallbackAttempted.current.has(item.id)) return !!codecAudioRef.current;
     codecFallbackBusy.current = item.id;
     codecFallbackAttempted.current.add(item.id);
-    setImporting({ done: 0, total: 100, label: "Decoding video audio" });
+    setImporting({ done: 0, total: 100, label: item.kind === "video" ? "Decoding video audio" : "Decoding audio" });
     try {
       const response = await fetch(item.url);
       if (!response.ok) throw new Error("Could not read the original media");
@@ -216,24 +222,34 @@ export function Player() {
       const gain = decoded.context.createGain();
       gain.gain.value = muted ? 0 : Math.max(0, Math.min(1, volume * sleepFade));
       gain.connect(decoded.context.destination);
-      codecAudioRef.current = { ...decoded, id: item.id, source: null, gain, startedAt: decoded.context.currentTime, offset: el.currentTime };
+      const initialOffset = Number.isFinite(el.currentTime) ? el.currentTime : 0;
+      codecAudioRef.current = { ...decoded, id: item.id, source: null, gain, startedAt: decoded.context.currentTime, offset: initialOffset };
       el.muted = true;
-      // Keep the original video stream; only replace the unsupported audio path.
-      // Muting first lets the browser continue the video when its audio decoder
-      // is the part that failed.
-      if (el.error && el.getAttribute("src")) el.load();
-      if (wantPlay.current) {
-        try {
-          await el.play();
-        } catch {
-          // A video codec failure cannot be fixed by an audio-only decoder.
-          return false;
+      // Keep the original file. FFmpeg decodes the audio in memory only;
+      // no replacement/transcoded media file is created.
+      if (item.kind === "video") {
+        if (el.error && el.getAttribute("src")) el.load();
+        if (wantPlay.current) {
+          try {
+            await el.play();
+          } catch {
+            // A video codec failure cannot be fixed by an audio-only decoder.
+            return false;
+          }
+          startCodecAudio(el.currentTime);
+        } else if (!el.paused) {
+          startCodecAudio(el.currentTime);
         }
-        startCodecAudio(el.currentTime);
-      } else if (!el.paused) {
-        startCodecAudio(el.currentTime);
+      } else if (wantPlay.current) {
+        startCodecAudio(initialOffset);
       }
-      toast("Using the original video audio codec");
+      if (!item.duration) {
+        const d = decoded.buffer.duration;
+        setDuration(d);
+        setTracks((old) => old.map((t) => t.id === item.id ? { ...t, duration: d } : t));
+        void patchTrack(item.id, { duration: d }).catch(() => {});
+      }
+      toast(item.kind === "video" ? "Using the original video audio codec" : "Using the original FLAC/audio decoder");
       return true;
     } catch {
       codecFallbackAttempted.current.delete(item.id);
@@ -247,9 +263,23 @@ export function Player() {
   function startPlayback(el: HTMLMediaElement) {
     resumeEngine();
     wantPlay.current = true;
+    if (codecAudioRef.current?.id === current?.id) {
+      startCodecAudio(codecAudioTime() ?? el.currentTime);
+      return;
+    }
     void el.play().catch((error: DOMException) => {
+      if (error?.name === "NotSupportedError" && current) {
+        void activateCodecAudio(current, el).then((ok) => {
+          if (!ok) {
+            wantPlay.current = false;
+            setPlaying(false);
+            toast("This audio/video codec could not be decoded");
+          }
+        });
+        return;
+      }
       // Load failures surface through the element's "error" event.
-      if (error?.name === "AbortError" || error?.name === "NotSupportedError") return;
+      if (error?.name === "AbortError") return;
       wantPlay.current = false;
       setPlaying(false);
       if (error?.name !== "NotAllowedError") toast("This file can't be played in this browser");
@@ -531,7 +561,15 @@ export function Player() {
         if (tracks.length) playTracks([...tracks].sort((a, b) => compareText(a.title, b.title)).map((t) => t.id), undefined, { source: "All songs" });
         return;
       }
-      if (el.paused) startPlayback(el);
+      if (codecAudioRef.current?.id === current.id) {
+        if (wantPlay.current) {
+          wantPlay.current = false;
+          stopCodecAudio();
+          setPlaying(false);
+        } else {
+          startPlayback(el);
+        }
+      } else if (el.paused) startPlayback(el);
       else {
         wantPlay.current = false;
         el.pause();
@@ -547,12 +585,12 @@ export function Player() {
       const el = mediaRef.current;
       if (!el || !Number.isFinite(time)) return;
       el.currentTime = Math.max(0, Math.min(time, el.duration || time));
-      if (el === videoRef.current && codecAudioRef.current?.id === current?.id) startCodecAudio(el.currentTime);
+      if (codecAudioRef.current?.id === current?.id) startCodecAudio(Math.max(0, Math.min(time, codecAudioRef.current.buffer.duration)));
       setCurrentTime(el.currentTime);
     },
     seekBy(delta) {
       const el = mediaRef.current;
-      if (el) impl.seek(el.currentTime + delta);
+      if (el) impl.seek((codecAudioTime() ?? el.currentTime) + delta);
     },
     jump(index) {
       if (index < 0 || index >= queue.length) return;
@@ -886,12 +924,12 @@ export function Player() {
       const el = mediaRef.current;
       if (!current || !el) return;
       const code = el.error?.code;
-      if (current.kind === "video" && (code === MediaError.MEDIA_ERR_DECODE || code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) && !codecFallbackAttempted.current.has(current.id)) {
+      if ((code === MediaError.MEDIA_ERR_DECODE || code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) && !codecFallbackAttempted.current.has(current.id)) {
         void activateCodecAudio(current, el).then((ok) => {
           if (!ok) {
             wantPlay.current = false;
             setPlaying(false);
-            toast("This video audio codec could not be decoded");
+            toast("This audio/video codec could not be decoded");
           }
         });
         return;
@@ -929,7 +967,7 @@ export function Player() {
         case "play": {
           setPlaying(true);
           resumeEngine();
-          if (el === video && codecAudioRef.current?.id === current?.id) startCodecAudio(video.currentTime);
+          if (codecAudioRef.current?.id === current?.id) startCodecAudio(codecAudioTime() ?? el.currentTime);
           if (el === video && current?.kind === "video" && !codecAudioRef.current && !codecFallbackAttempted.current.has(current.id)) {
             window.clearTimeout(videoAudioProbeTimer.current);
             const item = current;
@@ -961,7 +999,7 @@ export function Player() {
         case "loadedmetadata":
         case "durationchange": handlers.current.onMeta(el); break;
         case "ended":
-          if (el === video) stopCodecAudio();
+          if (codecAudioRef.current?.id === current?.id) stopCodecAudio();
           handlers.current.onEnded();
           break;
         case "error": handlers.current.onError(); break;
