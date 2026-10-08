@@ -6,6 +6,19 @@ export const videoExt = /\.(mp4|webm|ogv|mov|m4v|mkv|avi|3gp|3g2|ts|m2ts|mts|m2v
 
 export const supported = (name: string) => audioExt.test(name) || videoExt.test(name);
 export const kindOf = (name: string): "audio" | "video" => (videoExt.test(name) ? "video" : "audio");
+
+// Some browsers are stricter with Blob URLs when the stored Blob has an empty
+// or generic MIME type. Give the media element an explicit browser MIME type.
+export function mediaMime(name: string, kind: "audio" | "video") {
+  const ext = name.split(".").pop()?.toLowerCase();
+  const types: Record<string, string> = {
+    mp3: "audio/mpeg", wav: "audio/wav", m4a: "audio/mp4", aac: "audio/aac",
+    flac: "audio/flac", ogg: "audio/ogg", oga: "audio/ogg", opus: "audio/ogg",
+    weba: "audio/webm", aiff: "audio/aiff", aif: "audio/aiff", alac: "audio/mp4",
+    mp4: "video/mp4", m4v: "video/mp4", webm: "video/webm", ogv: "video/ogg", mov: "video/quicktime",
+  };
+  return types[ext ?? ""] ?? (kind === "video" ? "video/*" : "audio/*");
+}
 export const stripExt = (name: string) => name.replace(/\.[^.]+$/, "");
 export const folderOf = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 
@@ -85,7 +98,7 @@ export function toTrack(x: StoredLibraryItem): Track {
     folder: folderOf(x.path),
     addedAt: x.addedAt ?? x.lastModified,
     metaVersion: x.metaVersion ?? 0,
-    url: URL.createObjectURL(x.file),
+    url: URL.createObjectURL(x.file.type ? x.file : new Blob([x.file], { type: mediaMime(x.name, x.kind) })),
     cover: x.cover ? URL.createObjectURL(x.cover) : undefined,
   };
 }
