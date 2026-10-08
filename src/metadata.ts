@@ -48,12 +48,8 @@ export async function readItem({ file, path }: Incoming, addedAt: number): Promi
   };
   if (kind !== "audio") return item;
 
-  // Tag parsing must never block the import indefinitely. Some large or unusual
-  // audio files can make music-metadata take a long time in the browser; the
-  // track itself should still enter the library and can be enriched later.
-  const tags = await Promise.race([
-    readTags(file, file.name),
-    new Promise<Tags>((resolve) => window.setTimeout(() => resolve({ title: stripExt(file.name) }), 4000)),
-  ]);
-  return { ...item, ...tags };
+  // Do not parse tags during import. music-metadata can be slow or stall on
+  // unusual files; importing the file itself must never depend on tag parsing.
+  // Metadata is enriched asynchronously by the player after the item is saved.
+  return item;
 }
