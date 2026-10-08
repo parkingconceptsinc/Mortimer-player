@@ -187,6 +187,7 @@ export function Player() {
   const comicBusy = useRef(false);
   const rescanStarted = useRef(false);
   const returnScreen = useRef<Screen>("library");
+  const currentRef = useRef<Track | undefined>(undefined);
   const loadedTrack = useRef<{ id: string; kind: Track["kind"] } | null>(null);
   const videoAudioProbeTimer = useRef<number | undefined>(undefined);
 
@@ -246,6 +247,7 @@ export function Player() {
   const trackMap = useMemo(() => new Map(tracks.map((t) => [t.id, t])), [tracks]);
   const favorites = useMemo(() => new Set(favoritesList), [favoritesList]);
   const current = trackMap.get(queue[qIndex] ?? "");
+  currentRef.current = current;
   const sleepRemaining = sleep.endsAt ? Math.max(0, sleep.endsAt - now) / 1000 : null;
   const sleepFade = sleepRemaining != null && sleepRemaining < 15 ? sleepRemaining / 15 : 1;
 
@@ -974,22 +976,23 @@ export function Player() {
         case "play":
           setPlaying(true);
           resumeEngine();
-          if (el === video && current?.kind === "video") {
+          const item = currentRef.current;
+          if (el === video && item?.kind === "video") {
             window.clearTimeout(videoAudioProbeTimer.current);
-            const id = current.id;
+            const id = item.id;
             videoAudioProbeTimer.current = window.setTimeout(() => {
-              if (mediaRef.current !== video || current?.id !== id || video.paused || video.currentTime < 0.75) return;
-              if (transcodedUrls.has(id) || video.currentSrc !== current.url) return;
+              const live = currentRef.current;
+              if (mediaRef.current !== video || live?.id !== id || video.paused || video.currentTime < 0.75) return;
+              if (transcodedUrls.has(id) || video.currentSrc !== live.url) return;
               const decoded = (video as HTMLVideoElement & { webkitAudioDecodedByteCount?: number }).webkitAudioDecodedByteCount;
-              const nameLooksProblematic = /\.(mkv|avi|3gp|ts|m2ts|mts|vob|wmv|asf|flv|f4v|rmvb|rm)$/i.test(current.name)
-                || /\b(?:x265|x264|h[ ._-]?265|hevc|ac3|e[ ._-]?ac3|ddp|dd\+|dts)\b/i.test(current.name);
+              const nameLooksProblematic = /.(mkv|avi|3gp|ts|m2ts|mts|vob|wmv|asf|flv|f4v|rmvb|rm)$/i.test(live.name)
+                || /\b(?:x265|x264|h[ ._-]?265|hevc|ac3|e[ ._-]?ac3|ddp|dd\+|dts)\b/i.test(live.name);
               // Some browsers keep playing the video track while silently dropping
               // an unsupported audio codec. Convert the original source before
               // treating it as a real playback error.
-              if (nameLooksProblematic || decoded === 0) requestMediaTranscode(current, "video");
+              if (nameLooksProblematic || decoded === 0) requestMediaTranscode(live, "video");
             }, 1400);
-          }
-          break;
+          }          break;
         case "pause":
           window.clearTimeout(videoAudioProbeTimer.current);
           setPlaying(false);
