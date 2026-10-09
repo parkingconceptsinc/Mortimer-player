@@ -2,6 +2,7 @@ package com.parkingconcepts.mortimer
 
 import android.content.Intent
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -97,6 +98,14 @@ private fun saveMedia(context: Context, category: String, items: List<LocalMedia
         .edit().putStringSet(category, items.map { "${it.uri}\t${it.title}" }.toSet()).apply()
 }
 
+private fun displayName(context: Context, uri: Uri, fallback: String): String {
+    return runCatching {
+        context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)) else null
+        }
+    }.getOrNull()?.takeIf { it.isNotBlank() } ?: fallback
+}
+
 private fun rememberPermission(context: Context, uri: Uri) {
     runCatching {
         context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -126,28 +135,28 @@ private fun MortimerApp(player: ExoPlayer, openSpotify: () -> Unit, openExternal
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         uris.forEach { uri ->
             rememberPermission(context, uri)
-            audio.add(LocalMedia(uri, uri.lastPathSegment?.substringAfterLast('/') ?: "Archivo de audio", "audio/*"))
+            audio.add(LocalMedia(uri, displayName(context, uri, "Archivo de audio"), "audio/*"))
         }
         saveMedia(context, "audio", audio)
     }
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         uris.forEach { uri ->
             rememberPermission(context, uri)
-            videos.add(LocalMedia(uri, uri.lastPathSegment?.substringAfterLast('/') ?: "Vídeo", "video/*"))
+            videos.add(LocalMedia(uri, displayName(context, uri, "Vídeo"), "video/*"))
         }
         saveMedia(context, "videos", videos)
     }
     val bookPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         uris.forEach { uri ->
             rememberPermission(context, uri)
-            books.add(LocalMedia(uri, uri.lastPathSegment?.substringAfterLast('/') ?: "Libro", "*/*"))
+            books.add(LocalMedia(uri, displayName(context, uri, "Libro"), "*/*"))
         }
         saveMedia(context, "books", books)
     }
     val comicPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         uris.forEach { uri ->
             rememberPermission(context, uri)
-            comics.add(LocalMedia(uri, uri.lastPathSegment?.substringAfterLast('/') ?: "Cómic", "*/*"))
+            comics.add(LocalMedia(uri, displayName(context, uri, "Cómic"), "*/*"))
         }
         saveMedia(context, "comics", comics)
     }
