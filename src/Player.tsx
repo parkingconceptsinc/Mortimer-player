@@ -329,10 +329,11 @@ export function Player() {
   function startPlayback(el: HTMLMediaElement) {
     resumeEngine();
     wantPlay.current = true;
-    if (codecAudioRef.current?.id === current?.id) {
-      if (current.kind === "video" && el.paused) {
+    const track = current;
+    if (track && codecAudioRef.current?.id === track.id) {
+      if (track.kind === "video" && el.paused) {
         void el.play().then(() => {
-          if (wantPlay.current && codecAudioRef.current?.id === current.id) {
+          if (wantPlay.current && codecAudioRef.current?.id === track.id) {
             startCodecAudio(codecAudioTime() ?? el.currentTime);
           }
         }).catch(() => {
