@@ -20,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalContext
+import android.content.Context
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.MediaItem
@@ -73,27 +75,66 @@ class MainActivity : ComponentActivity() {
 
 private data class LocalMedia(val uri: Uri, val title: String, val mime: String)
 
+private fun loadMedia(context: Context, category: String, mime: String): List<LocalMedia> {
+    val values = context.getSharedPreferences("mortimer_library", Context.MODE_PRIVATE)
+        .getStringSet(category, emptySet()).orEmpty()
+    return values.mapNotNull { row ->
+        val parts = row.split("\t", limit = 2)
+        if (parts.size != 2) null else runCatching {
+            LocalMedia(Uri.parse(parts[0]), parts[1], mime)
+        }.getOrNull()
+    }.sortedBy { it.title.lowercase() }
+}
+
+private fun saveMedia(context: Context, category: String, items: List<LocalMedia>) {
+    context.getSharedPreferences("mortimer_library", Context.MODE_PRIVATE)
+        .edit().putStringSet(category, items.map { "\${it.uri}\t\${it.title}" }.toSet()).apply()
+}
+
+private fun rememberPermission(context: Context, uri: Uri) {
+    runCatching {
+        context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+}
+
 @Composable
 private fun MortimerApp(player: ExoPlayer, openSpotify: () -> Unit, openExternal: (Uri, String) -> Unit) {
-    val audio = remember { mutableStateListOf<LocalMedia>() }
-    val videos = remember { mutableStateListOf<LocalMedia>() }
-    val books = remember { mutableStateListOf<LocalMedia>() }
-    val comics = remember { mutableStateListOf<LocalMedia>() }
+    val context = LocalContext.current
+    val audio = remember { mutableStateListOf<LocalMedia>().apply { addAll(loadMedia(context, "audio", "audio/*")) } }
+    val videos = remember { mutableStateListOf<LocalMedia>().apply { addAll(loadMedia(context, "videos", "video/*")) } }
+    val books = remember { mutableStateListOf<LocalMedia>().apply { addAll(loadMedia(context, "books", "*/*")) } }
+    val comics = remember { mutableStateListOf<LocalMedia>().apply { addAll(loadMedia(context, "comics", "*/*")) } }
     var section by remember { mutableStateOf("Inicio") }
     var currentTitle by remember { mutableStateOf("Nada se está reproduciendo") }
     var isPlaying by remember { mutableStateOf(false) }
 
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        uris.forEach { audio.add(LocalMedia(it, it.lastPathSegment?.substringAfterLast('/') ?: "Archivo de audio", "audio/*")) }
+        uris.forEach { uri ->
+            rememberPermission(context, uri)
+            audio.add(LocalMedia(uri, uri.lastPathSegment?.substringAfterLast('/') ?: "Archivo de audio", "audio/*"))
+        }
+        saveMedia(context, "audio", audio)
     }
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        uris.forEach { videos.add(LocalMedia(it, it.lastPathSegment?.substringAfterLast('/') ?: "Vídeo", "video/*")) }
+        uris.forEach { uri ->
+            rememberPermission(context, uri)
+            videos.add(LocalMedia(uri, uri.lastPathSegment?.substringAfterLast('/') ?: "Vídeo", "video/*"))
+        }
+        saveMedia(context, "videos", videos)
     }
     val bookPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        uris.forEach { books.add(LocalMedia(it, it.lastPathSegment?.substringAfterLast('/') ?: "Libro", "*/*")) }
+        uris.forEach { uri ->
+            rememberPermission(context, uri)
+            books.add(LocalMedia(uri, uri.lastPathSegment?.substringAfterLast('/') ?: "Libro", "*/*"))
+        }
+        saveMedia(context, "books", books)
     }
     val comicPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        uris.forEach { comics.add(LocalMedia(it, it.lastPathSegment?.substringAfterLast('/') ?: "Cómic", "*/*")) }
+        uris.forEach { uri ->
+            rememberPermission(context, uri)
+            comics.add(LocalMedia(uri, uri.lastPathSegment?.substringAfterLast('/') ?: "Cómic", "*/*"))
+        }
+        saveMedia(context, "comics", comics)
     }
 
     DisposableEffect(player) {
