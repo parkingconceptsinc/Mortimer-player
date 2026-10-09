@@ -1,20 +1,23 @@
-const CACHE = "six-shell-v8";
+const CACHE = "six-shell-v9";
+const BASE = "/Mortimer-player/";
+const BUILD_ASSETS = [];
 const SHELL = [
-  "/Mortimer-player/",
-  "/Mortimer-player/manifest.webmanifest",
-  "/Mortimer-player/favicon.png",
-  "/Mortimer-player/logo.png",
-  "/Mortimer-player/icon-192.png",
-  "/Mortimer-player/icon-512.png"
+  BASE,
+  `${BASE}manifest.webmanifest`,
+  `${BASE}favicon.png`,
+  `${BASE}logo.png`,
+  `${BASE}icon-192.png`,
+  `${BASE}icon-512.png`
 ];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE).then(async (cache) => {
-      await Promise.all(SHELL.map(async (url) => {
+      const urls = [...new Set([...SHELL, ...BUILD_ASSETS.map((asset) => BASE + asset)])];
+      await Promise.all(urls.map(async (url) => {
         try {
-          const response = await fetch(url);
-          if (response.ok) await cache.put(url, response);
+          const response = await fetch(url, { cache: "reload" });
+          if (response.ok && response.type === "basic") await cache.put(url, response);
         } catch {}
       }));
     }).then(() => self.skipWaiting())
@@ -23,20 +26,20 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))
-    )
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((key) => key.startsWith("six-shell-") && key !== CACHE).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
 
-  const sameOrigin = new URL(request.url).origin === self.location.origin;
+  const url = new URL(request.url);
+  const sameOrigin = url.origin === self.location.origin;
   const staticAsset = ["script", "style", "font", "image", "manifest", "worker"].includes(request.destination);
-  const wasmAsset = sameOrigin && new URL(request.url).pathname.endsWith(".wasm");
+  const wasmAsset = sameOrigin && url.pathname.endsWith(".wasm");
 
   const cacheResponse = (response) => {
     if (sameOrigin && response.ok && response.type === "basic") {
@@ -50,7 +53,7 @@ self.addEventListener("fetch", (event) => {
     staticAsset || wasmAsset
       ? caches.match(request).then((cached) => cached || fetch(request).then(cacheResponse))
       : fetch(request).then(cacheResponse).catch(() =>
-          caches.match(request).then((cached) => cached || caches.match("/Mortimer-player/"))
+          caches.match(request).then((cached) => cached || caches.match(BASE))
         )
   );
 });
