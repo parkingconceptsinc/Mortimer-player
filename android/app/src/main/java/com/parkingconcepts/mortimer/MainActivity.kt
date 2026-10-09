@@ -248,8 +248,20 @@ private fun MortimerApp(player: ExoPlayer, openSpotify: () -> Unit, openExternal
                 }
                 "Cómics" -> {
                     Button(onClick = { comicPicker.launch(arrayOf("application/zip", "application/x-cbz", "application/pdf", "*/*")) }) { Text("＋ Importar cómics") }
-                    if (comics.isEmpty()) EmptyMessage("Selecciona archivos de cómic. El lector integrado CBZ/CBR queda pendiente.")
-                    LazyColumn { items(comics) { item -> MediaRow(item.title, "Archivo de cómic") { openExternal(item.uri, item.mime) } } }
+                    if (comics.isEmpty()) EmptyMessage("Importa archivos CBZ para leerlos aquí. CBR requiere una aplicación compatible.")
+                    LazyColumn { items(comics) { item ->
+                        MediaRow(item.title, "Archivo de cómic") {
+                            if (item.title.substringBefore("?").lowercase().endsWith(".cbz")) {
+                                runCatching {
+                                    context.startActivity(Intent(context, ComicReaderActivity::class.java).apply {
+                                        data = item.uri
+                                        putExtra(ComicReaderActivity.EXTRA_TITLE, item.title)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    })
+                                }.onFailure { openExternal(item.uri, item.mime) }
+                            } else openExternal(item.uri, item.mime)
+                        }
+                    } }
                 }
             }
             Spacer(Modifier.weight(1f))
