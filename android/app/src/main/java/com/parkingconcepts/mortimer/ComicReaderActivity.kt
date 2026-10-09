@@ -2,6 +2,7 @@ package com.parkingconcepts.mortimer
 
 import android.app.Activity
 import android.graphics.BitmapFactory
+import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
@@ -84,11 +85,19 @@ class ComicReaderActivity : Activity() {
         if (pages.isEmpty()) return
         pageIndex = index.coerceIn(0, pages.lastIndex)
         val entry = zip?.getEntry(pages[pageIndex]) ?: return
-        zip!!.getInputStream(entry).use { stream ->
-            val bitmap = BitmapFactory.decodeStream(stream)
-                ?: error("No se pudo decodificar la página.")
-            image.setImageBitmap(bitmap)
-        }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        zip!!.getInputStream(entry).use { BitmapFactory.decodeStream(it, null, bounds) }
+        val targetWidth = resources.displayMetrics.widthPixels - 32
+        val targetHeight = (resources.displayMetrics.heightPixels * 0.72f).toInt()
+        var sample = 1
+        while (bounds.outWidth / (sample * 2) >= targetWidth &&
+            bounds.outHeight / (sample * 2) >= targetHeight) sample *= 2
+        val bitmap = zip!!.getInputStream(entry).use { stream ->
+            BitmapFactory.decodeStream(stream, null, BitmapFactory.Options().apply { inSampleSize = sample })
+        } ?: error("No se pudo decodificar la página.")
+        val oldBitmap = (image.drawable as? BitmapDrawable)?.bitmap
+        image.setImageBitmap(bitmap)
+        if (oldBitmap != null && oldBitmap !== bitmap && !oldBitmap.isRecycled) oldBitmap.recycle()
         status.text = "Página ${pageIndex + 1} de ${pages.size}"
     }
 
