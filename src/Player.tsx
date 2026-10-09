@@ -1203,6 +1203,11 @@ export function Player() {
       if (old) URL.revokeObjectURL(old.url);
       return null;
     });
+    // Release decoded buffers and restore the video element even when the
+    // active item was removed and the queue no longer has a current track.
+    stopCodecAudio();
+    window.clearTimeout(videoAudioProbeTimer.current);
+    video.muted = false;
     if (!current) {
       if (el.getAttribute("src")) {
         el.removeAttribute("src");
@@ -1213,9 +1218,6 @@ export function Player() {
       setDuration(0);
       return;
     }
-    stopCodecAudio();
-    window.clearTimeout(videoAudioProbeTimer.current);
-    video.muted = false;
     const watched = videoProgress[current.id];
     if (current.kind === "video" && resumePosition && pendingSeek.current == null && watched > 5 && (!current.duration || watched < current.duration - 5)) {
       pendingSeek.current = watched;
