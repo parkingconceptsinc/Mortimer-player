@@ -783,6 +783,8 @@ export function Player() {
       const [item] = nextQueue.splice(from, 1);
       nextQueue.splice(to, 0, item);
       setQueue(nextQueue);
+      // A manual reorder becomes the new restore order while shuffle is enabled.
+      if (shuffle) setOriginalQueue(nextQueue);
       if (from === qIndex) setQIndex(to);
       else if (from < qIndex && to >= qIndex) setQIndex(qIndex - 1);
       else if (from > qIndex && to <= qIndex) setQIndex(qIndex + 1);
