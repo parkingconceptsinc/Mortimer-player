@@ -1070,3 +1070,10 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
     transition: none;
   }
 }
+
+
+/* Keep the audio home focused: the album carousel is redundant with the featured album above. */
+.library:has(.homeHero) > .sectionTitle:has(+ .albumRow),
+.library:has(.homeHero) > .sectionTitle:has(+ .albumRow) + .albumRow {
+  display: none;
+}
