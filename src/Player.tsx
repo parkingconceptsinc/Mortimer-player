@@ -551,7 +551,14 @@ export function Player() {
   function importEntries(entries: Incoming[], label?: string): Promise<void> {
     mediaImportQueue = mediaImportQueue
       .catch(() => {})
-      .then(() => performImportEntries(entries, label));
+      .then(() => performImportEntries(entries, label))
+      .catch((error) => {
+        // A failed import must never leave the progress UI stuck indefinitely.
+        setImporting(null);
+        toast((error as Error)?.name === "QuotaExceededError"
+          ? "Not enough browser storage to finish importing"
+          : "Import failed; check the files and available browser storage");
+      });
     return mediaImportQueue;
   }
 
