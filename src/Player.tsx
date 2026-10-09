@@ -86,7 +86,7 @@ export function Player() {
   const rescanStarted = useRef(false);
   const returnScreen = useRef<Screen>("library");
   const codecAudioRef = useRef<CodecAudioState | null>(null);
-  const codecFallbackBusy = useRef<string | null>(null);
+  const codecFallbackBusy = useRef(new Set<string>());
   const codecFallbackAttempted = useRef(new Set<string>());
   const videoAudioProbeTimer = useRef<number | undefined>(undefined);
   const codecTickTimer = useRef<number | undefined>(undefined);
@@ -255,9 +255,9 @@ export function Player() {
 
   async function activateCodecAudio(item: Track, el: HTMLMediaElement) {
     if (el !== mediaRef.current || (item.kind === "video" ? el !== videoRef.current : el !== audioRef.current)) return false;
-    if (codecFallbackBusy.current === item.id) return false;
+    if (codecFallbackBusy.current.has(item.id)) return false;
     if (codecFallbackAttempted.current.has(item.id)) return !!codecAudioRef.current;
-    codecFallbackBusy.current = item.id;
+    codecFallbackBusy.current.add(item.id);
     codecFallbackAttempted.current.add(item.id);
     setImporting({ done: 0, total: 100, label: item.kind === "video" ? "Decoding video audio" : "Decoding audio" });
     const originalMuted = el.muted;
@@ -309,7 +309,7 @@ export function Player() {
       codecFallbackAttempted.current.delete(item.id);
       return false;
     } finally {
-      codecFallbackBusy.current = null;
+      codecFallbackBusy.current.delete(item.id);
       if (playbackLiveRef.current.current?.id === item.id) setImporting(null);
     }
   }
