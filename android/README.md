@@ -18,12 +18,13 @@ El APK de depuración se genera en `app/build/outputs/apk/debug/app-debug.apk`. 
 - Selección de archivos de audio con el selector de documentos de Android; permite navegar por almacenamiento interno, SD y unidades USB compatibles con el dispositivo.
 - Persistencia local de las selecciones de biblioteca y de los permisos de acceso a documentos, para conservar la biblioteca al cerrar y volver a abrir la app.
 - Reproducción local en cola mediante AndroidX Media3/ExoPlayer, con controles básicos de reproducir, pausar y siguiente.
-- Selección de vídeos, libros y cómics; por ahora, esos elementos se abren con una aplicación externa compatible cuando corresponda.
+- Selección y reproducción de vídeo dentro de la app mediante Media3.
+- Selección de libros y cómics; los lectores integrados siguen pendientes.
 - Acceso directo a la aplicación oficial de Spotify, o a Spotify Web si la aplicación no está instalada.
 - Se conserva el servicio de medios de Android Auto existente, que requiere pruebas en un dispositivo y vehículo compatibles.
 
 ## Estado y limitaciones
 
-Esta es una versión preliminar de la conversión nativa, no una paridad funcional completa con la PWA. La persistencia básica de las selecciones ya está implementada; todavía faltan controles de reproducción completos, lectores nativos de EPUB/PDF/CBZ/CBR, reproducción de vídeo integrada, ecualizador, preferencias, y pruebas de Android Auto. Spotify se abre en su aplicación oficial: la reproducción completa de su catálogo dentro de Mortimer Player no está implementada.
+Esta es una versión preliminar de la conversión nativa, no una paridad funcional completa con la PWA. La persistencia básica de las selecciones ya está implementada; todavía faltan controles de reproducción completos, lectores nativos de EPUB/PDF/CBZ/CBR, ecualizador, preferencias, y pruebas de Android Auto. Spotify se abre en su aplicación oficial: la reproducción completa de su catálogo dentro de Mortimer Player no está implementada.
 
 La app no usa WebView ni carga la PWA. No se afirma que el APK esté listo para distribución final hasta que el workflow compile correctamente y las funciones se prueben en dispositivos reales.
