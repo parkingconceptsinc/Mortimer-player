@@ -291,6 +291,13 @@ export const NowPlaying = memo(function NowPlaying({ active }: { active: boolean
 
           <SeekBar />
 
+          <div className="npVolume">
+            <button className="iconBtn" aria-label={p.muted ? "Unmute" : "Mute"} onClick={actions.toggleMute}><VolumeIcon size={20} /></button>
+            <input type="range" className="range" min={0} max={1} step={0.01} value={p.muted ? 0 : p.volume} aria-label="Volume"
+              style={{ "--pct": `${(p.muted ? 0 : p.volume) * 100}%` } as CSSProperties} onChange={(e) => actions.setVolume(Number(e.target.value))} />
+            <span className="volValue">{Math.round((p.muted ? 0 : p.volume) * 100 * p.boost)}%</span>
+          </div>
+
           <div className="npControls">
             <button className={"iconBtn" + (p.shuffle ? " on" : "")} aria-label="Shuffle" aria-pressed={p.shuffle} onClick={actions.toggleShuffle}><Shuffle size={22} /></button>
             <button className="iconBtn big" aria-label="Previous" onClick={actions.prev}><SkipBack size={30} fill="currentColor" /></button>
@@ -312,12 +319,7 @@ export const NowPlaying = memo(function NowPlaying({ active }: { active: boolean
             <ToolButton icon={RotateCw} label={`+${p.skipSeconds}s`} onClick={() => actions.seekBy(p.skipSeconds)} />
           </div>
 
-          <div className="npVolume">
-            <button className="iconBtn" aria-label={p.muted ? "Unmute" : "Mute"} onClick={actions.toggleMute}><VolumeIcon size={20} /></button>
-            <input type="range" className="range" min={0} max={1} step={0.01} value={p.muted ? 0 : p.volume} aria-label="Volume"
-              style={{ "--pct": `${(p.muted ? 0 : p.volume) * 100}%` } as CSSProperties} onChange={(e) => actions.setVolume(Number(e.target.value))} />
-            <span className="volValue">{Math.round((p.muted ? 0 : p.volume) * 100 * p.boost)}%</span>
-          </div>
+
 
           {nextTrack && (
             <button className="npNext" onClick={() => actions.goTo("queue")}>
