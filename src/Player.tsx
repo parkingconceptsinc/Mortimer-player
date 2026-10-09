@@ -93,6 +93,7 @@ export function Player() {
 
   const [loaded, setLoaded] = useState(false);
   const [tracks, setTracks] = useState<Track[]>([]);
+  const tracksLiveRef = useRef<Track[]>([]);
   const [queue, setQueue] = usePref<string[]>("queue", []);
   const [qIndex, setQIndex] = usePref("qIndex", 0);
   const [originalQueue, setOriginalQueue] = usePref<string[] | null>("originalQueue", null);
@@ -117,6 +118,7 @@ export function Player() {
   const [favoritesList, setFavoritesList] = usePref<string[]>("favorites", []);
   const [videoProgress, setVideoProgress] = usePref<Record<string, number>>("videoProgress", {});
   const [comics, setComics] = useState<Comic[]>([]);
+  const comicsLiveRef = useRef<Comic[]>([]);
   const [comicProgress, setComicProgress] = usePref<Record<string, ComicProgress>>("comicProgress", {});
   const [readerSettings, setReaderSettings] = usePref<ReaderSettings>("readerSettings", DEFAULT_READER);
   const [reader, setReader] = useState<{ id: string; start: number | null } | null>(null);
@@ -138,6 +140,9 @@ export function Player() {
   const [menu, setMenu] = useState<MenuTarget | null>(null);
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [thumbTick, setThumbTick] = useState(0);
+
+  tracksLiveRef.current = tracks;
+  comicsLiveRef.current = comics;
 
   useEffect(() => () => {
     if (subtitleUrlRef.current) URL.revokeObjectURL(subtitleUrlRef.current);
@@ -419,7 +424,8 @@ export function Player() {
   }
 
   async function performImportEntries(entries: Incoming[], label?: string) {
-    const seen = new Set([...tracks, ...comics].map((t) => trackKey(t.path, t.size, t.lastModified)));
+    // Read current library refs when a queued import starts, not the render that queued it.
+    const seen = new Set([...tracksLiveRef.current, ...comicsLiveRef.current].map((t) => trackKey(t.path, t.size, t.lastModified)));
     const isNew = ({ file, path }: Incoming) => {
       const key = trackKey(path, file.size, file.lastModified);
       if (seen.has(key)) return false;
