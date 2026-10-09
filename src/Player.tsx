@@ -330,7 +330,20 @@ export function Player() {
     resumeEngine();
     wantPlay.current = true;
     if (codecAudioRef.current?.id === current?.id) {
-      startCodecAudio(codecAudioTime() ?? el.currentTime);
+      if (current.kind === "video" && el.paused) {
+        void el.play().then(() => {
+          if (wantPlay.current && codecAudioRef.current?.id === current.id) {
+            startCodecAudio(codecAudioTime() ?? el.currentTime);
+          }
+        }).catch(() => {
+          wantPlay.current = false;
+          pauseCodecAudio();
+          setPlaying(false);
+          toast("The video couldn't resume");
+        });
+      } else {
+        startCodecAudio(codecAudioTime() ?? el.currentTime);
+      }
       return;
     }
     void el.play().catch((error: DOMException) => {
@@ -664,7 +677,8 @@ export function Player() {
       if (codecAudioRef.current?.id === current.id) {
         if (wantPlay.current) {
           wantPlay.current = false;
-          stopCodecAudio();
+          pauseCodecAudio();
+          if (current.kind === "video") el.pause();
           setPlaying(false);
         } else {
           startPlayback(el);
