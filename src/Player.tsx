@@ -732,7 +732,10 @@ export function Player() {
       wantPlay.current = true;
       const el = mediaRef.current;
       if (index === qIndex && el) {
-        el.currentTime = 0;
+        if (codecAudioRef.current?.id === current?.id) impl.seek(0);
+        else {
+          try { el.currentTime = 0; } catch {}
+        }
         startPlayback(el);
       }
       setQIndex(index);
