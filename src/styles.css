@@ -626,3 +626,92 @@ video::cue { font-size: var(--cue, 100%); background: #000b; }
   .eqScreen > *:not(.screenHeader), .settingsScreen > *:not(.screenHeader) { max-width: 760px; }
   .toast { bottom: 110px; left: calc(50% + 122px); }
 }
+
+
+/* ---------- Visual refinement: depth, focus and responsive polish ---------- */
+:root {
+  --panel: #111118;
+  --panel2: #191922;
+  --line: #292936;
+  --accent: #ff8057;
+  --on-accent: #171014;
+}
+::selection { background: color-mix(in srgb, var(--accent) 38%, transparent); color: var(--text); }
+button { -webkit-appearance: none; }
+button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 88%, white);
+  outline-offset: 3px;
+}
+.screenHeader {
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  backdrop-filter: blur(22px) saturate(1.25);
+}
+.screenTitle h1 { letter-spacing: -0.035em; }
+.btn, .iconBtn, .chip, .tile, .albumCover, .videoThumb, .comicCover, .trackRow, .npNext {
+  -webkit-tap-highlight-color: transparent;
+}
+.btn { box-shadow: 0 1px 0 #ffffff08 inset; }
+.btn.primary { box-shadow: 0 5px 18px color-mix(in srgb, var(--accent) 18%, transparent), 0 1px 0 #ffffff22 inset; }
+.iconBtn.on { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.trackRow {
+  border: 1px solid transparent;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.trackRow.active {
+  border-color: color-mix(in srgb, var(--accent) 18%, transparent);
+  background: linear-gradient(100deg, color-mix(in srgb, var(--accent) 10%, transparent), color-mix(in srgb, var(--accent) 3%, transparent));
+}
+.trackRow.active .thumb .art { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); }
+.albumCover .art, .videoThumb .art, .comicCover .art {
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), filter 0.28s;
+}
+.albumCard:hover .albumCover .art, .videoCard:hover .videoThumb .art, .comicCard:hover .comicCover .art {
+  filter: brightness(1.08);
+}
+.tile {
+  box-shadow: 0 1px 0 #ffffff06 inset, 0 8px 24px #0002;
+}
+.tile:focus-visible, .albumCard:focus-visible, .videoCard:focus-visible, .comicCard:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.searchBox { box-shadow: 0 1px 0 #ffffff05 inset; }
+.searchBox:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent); }
+.npArt { box-shadow: 0 28px 72px #000b, 0 0 0 1px #ffffff16; }
+.videoStage { border: 1px solid #ffffff14; }
+.playBtn { box-shadow: 0 12px 32px color-mix(in srgb, var(--accent) 32%, transparent), 0 1px 0 #ffffff35 inset; }
+.npNext { transition: background 0.18s, border-color 0.18s, transform 0.18s; }
+.npNext:hover { border-color: color-mix(in srgb, var(--accent) 28%, var(--line)); }
+.miniPlayer { border-color: color-mix(in srgb, var(--line) 80%, #ffffff12); }
+.tabbar button { transition: color 0.16s, background 0.16s; }
+.tabbar button.active { text-shadow: 0 0 22px color-mix(in srgb, var(--accent) 18%, transparent); }
+.sheet { border-color: #ffffff18; background: color-mix(in srgb, var(--panel) 94%, #242430); }
+@media (min-width: 900px) {
+  .nowPlaying:not(.videoMode) { padding-right: clamp(28px, 5vw, 72px); padding-left: clamp(28px, 5vw, 72px); }
+  .nowPlaying:not(.videoMode) .npArtWrap { width: min( min(44vw, 460px), max(220px, calc(100dvh - 560px))); }
+  .nowPlaying:not(.videoMode) .npInfo,
+  .nowPlaying:not(.videoMode) .seek,
+  .nowPlaying:not(.videoMode) .npControls,
+  .nowPlaying:not(.videoMode) .npVolume,
+  .nowPlaying:not(.videoMode) .npNext { max-width: 520px; }
+  .nowPlaying:not(.videoMode) .npTools { justify-content: center; }
+}
+@media (max-width: 600px) {
+  .trackRow { gap: 8px; padding-left: 2px; padding-right: 0; }
+  .thumb { width: 44px; height: 44px; }
+  .trackText b { font-size: 14px; }
+  .trackText small { font-size: 11.5px; }
+  .trackDur { font-size: 11.5px; }
+  .screenTitle h1 { font-size: 23px; }
+  .nowPlaying { padding-right: 16px; padding-left: 16px; }
+  .npTools { margin-right: -16px; margin-left: -16px; padding-right: 16px; padding-left: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
