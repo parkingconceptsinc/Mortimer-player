@@ -132,11 +132,17 @@ export function Player() {
   const [now, setNow] = useState(() => Date.now());
   const [ab, setAb] = useState<{ a: number | null; b: number | null }>({ a: null, b: null });
   const [subtitles, setSubtitles] = useState<{ url: string; name: string } | null>(null);
+  const subtitleUrlRef = useRef<string | null>(null);
   const [importing, setImporting] = useState<{ done: number; total: number; label?: string } | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuTarget | null>(null);
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [thumbTick, setThumbTick] = useState(0);
+
+  useEffect(() => () => {
+    if (subtitleUrlRef.current) URL.revokeObjectURL(subtitleUrlRef.current);
+    subtitleUrlRef.current = null;
+  }, []);
 
   useEffect(() => {
     if (readPref("brandSix", false)) return;
@@ -865,10 +871,9 @@ export function Player() {
     loadSubtitles(file) {
       void file.text().then((text) => {
         const url = URL.createObjectURL(new Blob([srtToVtt(text)], { type: "text/vtt" }));
-        setSubtitles((old) => {
-          if (old) URL.revokeObjectURL(old.url);
-          return { url, name: file.name };
-        });
+        if (subtitleUrlRef.current) URL.revokeObjectURL(subtitleUrlRef.current);
+        subtitleUrlRef.current = url;
+        setSubtitles({ url, name: file.name });
         toast(`Subtitles: ${file.name}`);
       }).catch(() => toast("Couldn't read that subtitle file"));
     },
@@ -1216,6 +1221,7 @@ export function Player() {
     setAb({ a: null, b: null });
     setSubtitles((old) => {
       if (old) URL.revokeObjectURL(old.url);
+      subtitleUrlRef.current = null;
       return null;
     });
     // Release decoded buffers and restore the video element even when the
@@ -1360,7 +1366,12 @@ export function Player() {
           const patch = Object.fromEntries(Object.entries({ ...tags, metaVersion: META_VERSION }).filter(([, v]) => v !== undefined));
           await patchTrack(track.id, patch).catch(() => {});
           const cover = tags.cover ? URL.createObjectURL(tags.cover) : undefined;
-          setTracks((old) => old.map((t) => {
+          setTracks((old) => {
+            if (!old.some((t) => t.id === track.id)) {
+              if (cover) URL.revokeObjectURL(cover);
+              return old;
+            }
+            return old.map((t) => {
             if (t.id !== track.id) return t;
             if (cover && t.cover) URL.revokeObjectURL(t.cover);
             return {
@@ -1376,7 +1387,8 @@ export function Player() {
               cover: cover ?? t.cover,
               metaVersion: META_VERSION,
             };
-          }));
+            });
+          });
           if (tags.artist || tags.album || tags.cover) improved++;
         } catch {}
       }
