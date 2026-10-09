@@ -241,6 +241,7 @@ export function Player() {
     codecFallbackBusy.current = item.id;
     codecFallbackAttempted.current.add(item.id);
     setImporting({ done: 0, total: 100, label: item.kind === "video" ? "Decoding video audio" : "Decoding audio" });
+    const originalMuted = el.muted;
     try {
       const response = await fetch(item.url);
       if (!response.ok) throw new Error("Could not read the original media");
@@ -264,6 +265,8 @@ export function Player() {
             await el.play();
           } catch {
             // A video codec failure cannot be fixed by an audio-only decoder.
+            stopCodecAudio();
+            el.muted = originalMuted;
             return false;
           }
           startCodecAudio(el.currentTime);
@@ -282,6 +285,8 @@ export function Player() {
       toast(item.kind === "video" ? "Using the original video audio codec" : "Using the original FLAC/audio decoder");
       return true;
     } catch {
+      if (codecAudioRef.current?.id === item.id) stopCodecAudio();
+      el.muted = originalMuted;
       codecFallbackAttempted.current.delete(item.id);
       return false;
     } finally {
