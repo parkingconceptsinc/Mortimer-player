@@ -21,6 +21,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.ui.PlayerView
 import android.content.Context
 import android.Manifest
 import android.content.pm.PackageManager
@@ -118,6 +120,7 @@ private fun MortimerApp(player: ExoPlayer, openSpotify: () -> Unit, openExternal
     val comics = remember { mutableStateListOf<LocalMedia>().apply { addAll(loadMedia(context, "comics", "*/*")) } }
     var section by remember { mutableStateOf("Inicio") }
     var currentTitle by remember { mutableStateOf("Nada se está reproduciendo") }
+    var currentVideoUri by remember { mutableStateOf<Uri?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
 
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -194,6 +197,7 @@ private fun MortimerApp(player: ExoPlayer, openSpotify: () -> Unit, openExternal
                         items(audio) { item ->
                             MediaRow(item.title, "Audio local") {
                                 currentTitle = item.title
+                                currentVideoUri = null
                                 val selectedIndex = audio.indexOf(item).coerceAtLeast(0)
                                 player.setMediaItems(audio.map { MediaItem.fromUri(it.uri) }, selectedIndex, 0L)
                                 player.prepare()
@@ -209,7 +213,24 @@ private fun MortimerApp(player: ExoPlayer, openSpotify: () -> Unit, openExternal
                 "Vídeos" -> {
                     Button(onClick = { videoPicker.launch(arrayOf("video/*")) }) { Text("＋ Añadir vídeos") }
                     if (videos.isEmpty()) EmptyMessage("Selecciona vídeos del dispositivo, SD o USB.")
-                    LazyColumn { items(videos) { item -> MediaRow(item.title, "Vídeo local") { openExternal(item.uri, item.mime) } } }
+                    LazyColumn(modifier = Modifier.weight(1f)) {
+                        items(videos) { item ->
+                            MediaRow(item.title, "Vídeo local") {
+                                currentTitle = item.title
+                                currentVideoUri = item.uri
+                                player.setMediaItem(MediaItem.fromUri(item.uri))
+                                player.prepare()
+                                player.play()
+                            }
+                        }
+                    }
+                    if (currentVideoUri != null) {
+                        AndroidView(
+                            factory = { viewContext -> PlayerView(viewContext).apply { this.player = player; useController = true } },
+                            update = { it.player = player },
+                            modifier = Modifier.fillMaxWidth().height(220.dp)
+                        )
+                    }
                 }
                 "Libros" -> {
                     Button(onClick = { bookPicker.launch(arrayOf("application/epub+zip", "application/pdf", "text/plain", "*/*")) }) { Text("＋ Importar libros") }
