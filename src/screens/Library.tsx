@@ -254,10 +254,37 @@ function Home({ lib }: { lib: Lib }) {
     [{ view: "history" }, "Recently played", History, ""],
   ];
   const recentAlbums = [...lib.albums].sort((a, b) => b.addedAt - a.addedAt).slice(0, 14);
+  const featuredAlbum = recentAlbums[0];
   const recentlyPlayed = Object.entries(lastPlayed).sort((a, b) => b[1] - a[1]).map(([id]) => trackMap.get(id)).filter((t): t is Track => !!t).slice(0, 6);
 
   return (
     <>
+      <section className="homeHero" aria-label="Library overview">
+        <div className="homeHeroGlow" />
+        <div className="homeHeroCopy">
+          <span className="homeEyebrow"><Disc3 size={14} /> YOUR COLLECTION</span>
+          <h2>Your sound.<br />Your space.</h2>
+          <p>Your music, albums and favorites — all together, ready when you are.</p>
+          <div className="homeHeroStats">
+            <span><b>{lib.songs.length}</b> songs</span>
+            <i />
+            <span><b>{lib.albums.length}</b> albums</span>
+            <i />
+            <span><b>{lib.artists.length}</b> artists</span>
+          </div>
+        </div>
+        {featuredAlbum && (
+          <div className="homeFeatured">
+            <Art src={featuredAlbum.cover} seed={featuredAlbum.title} className="homeFeaturedArt" />
+            <div className="homeFeaturedText">
+              <span>RECENTLY ADDED</span>
+              <b>{featuredAlbum.title}</b>
+              <small>{featuredAlbum.artist}</small>
+            </div>
+            <button className="homeFeaturedPlay" aria-label={`Play album ${featuredAlbum.title}`} title="Play album" onClick={() => actions.playTracks(featuredAlbum.tracks.map((t) => t.id), undefined, { shuffle: false, source: featuredAlbum.title })}><Play size={19} fill="currentColor" /></button>
+          </div>
+        )}
+      </section>
       <div className="quickActions">
         <button className="btn primary" onClick={() => actions.playTracks(lib.songs.map((t) => t.id), undefined, { shuffle: true, source: "All songs" })}><Shuffle size={18} /> Shuffle all</button>
         <button className="btn" onClick={() => actions.playTracks(sortTracks(lib.songs, "title", {}).map((t) => t.id), undefined, { shuffle: false, source: "All songs" })}><Play size={18} /> Play all</button>
