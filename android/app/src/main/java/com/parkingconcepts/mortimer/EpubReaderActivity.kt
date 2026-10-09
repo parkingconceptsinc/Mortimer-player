@@ -3,7 +3,6 @@ package com.parkingconcepts.mortimer
 import android.app.Activity
 import android.graphics.Color
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.text.Html
 import android.view.Gravity
@@ -70,8 +69,7 @@ class EpubReaderActivity : Activity() {
 
     private fun htmlToText(html: String): CharSequence {
         val cleaned = html.replace(Regex("(?is)<(script|style)[^>]*>.*?</\\1>"), "")
-        return if (Build.VERSION.SDK_INT >= 24) Html.fromHtml(cleaned, Html.FROM_HTML_MODE_COMPACT)
-        else @Suppress("DEPRECATION") Html.fromHtml(cleaned)
+        return Html.fromHtml(cleaned, Html.FROM_HTML_MODE_COMPACT)
     }
 
     private fun buildLayout() {
