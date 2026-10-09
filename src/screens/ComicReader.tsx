@@ -104,7 +104,7 @@ export function ComicReader() {
       const saved = comic ? comicProgress[comic.id] : undefined;
       return saved && saved.page < saved.pages - 1 ? saved.page : 0;
     });
-  }, [comic?.id]);
+  }, [comic?.id, readerStart]);
 
   useEffect(() => {
     if (!comic) return;
