@@ -125,6 +125,10 @@ private fun loadMedia(context: Context, category: String, mime: String): List<Lo
     }.sortedBy { it.title.lowercase() }
 }
 
+private fun addMediaIfMissing(target: MutableList<LocalMedia>, item: LocalMedia) {
+    if (target.none { it.uri == item.uri }) target.add(item)
+}
+
 private fun saveMedia(context: Context, category: String, items: List<LocalMedia>) {
     context.getSharedPreferences("mortimer_library", Context.MODE_PRIVATE)
         .edit().putStringSet(category, items.map { "${it.uri}\t${it.title}" }.toSet()).apply()
@@ -167,28 +171,28 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         uris.forEach { uri ->
             rememberPermission(context, uri)
-            audio.add(LocalMedia(uri, displayName(context, uri, "Archivo de audio"), "audio/*"))
+            addMediaIfMissing(audio, LocalMedia(uri, displayName(context, uri, "Archivo de audio"), "audio/*"))
         }
         saveMedia(context, "audio", audio)
     }
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         uris.forEach { uri ->
             rememberPermission(context, uri)
-            videos.add(LocalMedia(uri, displayName(context, uri, "Vídeo"), "video/*"))
+            addMediaIfMissing(videos, LocalMedia(uri, displayName(context, uri, "Vídeo"), "video/*"))
         }
         saveMedia(context, "videos", videos)
     }
     val bookPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         uris.forEach { uri ->
             rememberPermission(context, uri)
-            books.add(LocalMedia(uri, displayName(context, uri, "Libro"), "*/*"))
+            addMediaIfMissing(books, LocalMedia(uri, displayName(context, uri, "Libro"), "*/*"))
         }
         saveMedia(context, "books", books)
     }
     val comicPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         uris.forEach { uri ->
             rememberPermission(context, uri)
-            comics.add(LocalMedia(uri, displayName(context, uri, "Cómic"), "*/*"))
+            addMediaIfMissing(comics, LocalMedia(uri, displayName(context, uri, "Cómic"), "*/*"))
         }
         saveMedia(context, "comics", comics)
     }
