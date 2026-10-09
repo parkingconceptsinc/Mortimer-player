@@ -695,7 +695,7 @@ export function Player() {
       const el = mediaRef.current;
       const codecTime = codecAudioRef.current?.id === current?.id ? codecAudioTime() : null;
       if (codecTime != null) {
-        if (codecTime > 3) startCodecAudio(0);
+        if (codecTime > 3) impl.seek(0);
         else advance(-1, false);
       } else if (el && el.currentTime > 3) el.currentTime = 0;
       else advance(-1, false);
@@ -705,8 +705,19 @@ export function Player() {
       if (!el || !Number.isFinite(time)) return;
       const codec = codecAudioRef.current?.id === current?.id ? codecAudioRef.current : null;
       if (codec) {
-        startCodecAudio(Math.max(0, Math.min(time, codec.buffer.duration)));
-        setCurrentTime(Math.max(0, Math.min(time, codec.buffer.duration)));
+        const target = Math.max(0, Math.min(time, codec.buffer.duration));
+        // Keep the silent native video timeline aligned with decoded fallback audio.
+        if (current?.kind === "video") {
+          try { el.currentTime = target; } catch {}
+        }
+        if (wantPlay.current) {
+          startCodecAudio(target);
+        } else {
+          pauseCodecAudio();
+          codec.offset = target;
+          codec.startedAt = codec.context.currentTime;
+        }
+        setCurrentTime(target);
         return;
       }
       el.currentTime = Math.max(0, Math.min(time, el.duration || time));
