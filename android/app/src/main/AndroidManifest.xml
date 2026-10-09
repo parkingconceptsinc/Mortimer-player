@@ -29,9 +29,6 @@
             <intent-filter>
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
-            <meta-data
-                android:name="android.media.browse"
-                android:resource="@xml/automotive_app_desc" />
         </service>
     </application>
 </manifest>
