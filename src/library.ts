@@ -50,17 +50,35 @@ const VERSION = 2;
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, VERSION);
+    let settled = false;
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: "id" });
       if (!db.objectStoreNames.contains(COMICS)) db.createObjectStore(COMICS, { keyPath: "id" });
     };
     request.onsuccess = () => {
+      const db = request.result;
+      // A blocked open may eventually succeed after another tab closes. Don't
+      // leak that late connection after reporting the blocked request to callers.
+      if (settled) {
+        db.close();
+        return;
+      }
+      settled = true;
       // Lets a newer tab upgrade the schema instead of being blocked by this connection.
-      request.result.onversionchange = () => request.result.close();
-      resolve(request.result);
+      db.onversionchange = () => db.close();
+      resolve(db);
     };
-    request.onerror = () => reject(request.error);
+    request.onerror = () => {
+      if (settled) return;
+      settled = true;
+      reject(request.error ?? new Error("Couldn't open local library storage"));
+    };
+    request.onblocked = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("Local library storage is blocked by another open tab. Close other Mortimer tabs and retry."));
+    };
   });
 }
 
