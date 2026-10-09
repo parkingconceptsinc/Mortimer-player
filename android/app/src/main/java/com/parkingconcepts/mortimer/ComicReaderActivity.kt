@@ -90,7 +90,7 @@ class ComicReaderActivity : Activity() {
         val targetWidth = resources.displayMetrics.widthPixels - 32
         val targetHeight = (resources.displayMetrics.heightPixels * 0.72f).toInt()
         var sample = 1
-        while (bounds.outWidth / (sample * 2) >= targetWidth &&
+        while (bounds.outWidth / (sample * 2) >= targetWidth ||
             bounds.outHeight / (sample * 2) >= targetHeight) sample *= 2
         val bitmap = zip!!.getInputStream(entry).use { stream ->
             BitmapFactory.decodeStream(stream, null, BitmapFactory.Options().apply { inSampleSize = sample })
