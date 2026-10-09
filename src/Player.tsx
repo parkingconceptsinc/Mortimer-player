@@ -147,6 +147,8 @@ export function Player() {
   const trackMap = useMemo(() => new Map(tracks.map((t) => [t.id, t])), [tracks]);
   const favorites = useMemo(() => new Set(favoritesList), [favoritesList]);
   const current = trackMap.get(queue[qIndex] ?? "");
+  const playbackLiveRef = useRef<{ current: Track | undefined; speed: number; ab: { a: number | null; b: number | null }; muted: boolean; volume: number; sleepFade: number }>({ current, speed, ab, muted, volume, sleepFade });
+  playbackLiveRef.current = { current, speed, ab, muted, volume, sleepFade };
   const sleepRemaining = sleep.endsAt ? Math.max(0, sleep.endsAt - now) / 1000 : null;
   const sleepFade = sleepRemaining != null && sleepRemaining < 15 ? sleepRemaining / 15 : 1;
 
@@ -208,19 +210,19 @@ export function Player() {
   function codecAudioTime() {
     const state = codecAudioRef.current;
     if (!state) return null;
-    return Math.max(0, Math.min(state.buffer.duration, state.offset + (state.context.currentTime - state.startedAt) * speed));
+    return Math.max(0, Math.min(state.buffer.duration, state.offset + (state.context.currentTime - state.startedAt) * playbackLiveRef.current.speed));
   }
 
   function startCodecAudio(offset: number) {
     const state = codecAudioRef.current;
     const el = mediaRef.current;
-    if (!state || !el || state.id !== current?.id) return;
+    if (!state || !el || state.id !== playbackLiveRef.current.current?.id) return;
     const safeOffset = Math.max(0, Math.min(offset, Math.max(0, state.buffer.duration - 0.01)));
     try { state.source?.stop(); } catch {}
     state.source?.disconnect();
     const source = state.context.createBufferSource();
     source.buffer = state.buffer;
-    source.playbackRate.value = speed;
+    source.playbackRate.value = playbackLiveRef.current.speed;
     source.connect(state.gain);
     state.source = source;
     state.offset = safeOffset;
@@ -228,7 +230,7 @@ export function Player() {
     void state.context.resume().catch(() => {});
     source.onended = () => {
       const live = codecAudioRef.current;
-      if (live?.id === current?.id && live.source === source && live.buffer.duration > 0) {
+      if (live?.id === playbackLiveRef.current.current?.id && live.source === source && live.buffer.duration > 0) {
         finishCodecAudio(live.id);
       }
     };
@@ -236,13 +238,14 @@ export function Player() {
     window.clearInterval(codecTickTimer.current);
     codecTickTimer.current = window.setInterval(() => {
       const live = codecAudioRef.current;
-      if (!live || live.id !== current?.id || live.source !== source) return;
+      if (!live || live.id !== playbackLiveRef.current.current?.id || live.source !== source) return;
       const t = codecAudioTime();
       if (t == null) return;
       setCurrentTime(t);
       setDuration(live.buffer.duration);
-      if (ab.a != null && ab.b != null && t >= ab.b) {
-        startCodecAudio(ab.a);
+      const loop = playbackLiveRef.current.ab;
+      if (loop.a != null && loop.b != null && t >= loop.b) {
+        startCodecAudio(loop.a);
         return;
       }
       if (t >= live.buffer.duration - 0.05) finishCodecAudio(live.id);
@@ -261,12 +264,12 @@ export function Player() {
       const response = await fetch(item.url);
       if (!response.ok) throw new Error("Could not read the original media");
       const decoded = await decodeAudioTrack(await response.blob());
-      if (current?.id !== item.id || (item.kind === "video" ? videoRef.current !== el : audioRef.current !== el)) {
+      if (playbackLiveRef.current.current?.id !== item.id || (item.kind === "video" ? videoRef.current !== el : audioRef.current !== el)) {
         void decoded.context.close().catch(() => {});
         return false;
       }
       const gain = decoded.context.createGain();
-      gain.gain.value = muted ? 0 : Math.max(0, Math.min(1, volume * sleepFade));
+      gain.gain.value = playbackLiveRef.current.muted ? 0 : Math.max(0, Math.min(1, playbackLiveRef.current.volume * playbackLiveRef.current.sleepFade));
       gain.connect(decoded.context.destination);
       const initialOffset = Number.isFinite(el.currentTime) ? el.currentTime : 0;
       codecAudioRef.current = { ...decoded, id: item.id, source: null, gain, startedAt: decoded.context.currentTime, offset: initialOffset };
@@ -306,7 +309,7 @@ export function Player() {
       return false;
     } finally {
       codecFallbackBusy.current = null;
-      if (current?.id === item.id) setImporting(null);
+      if (playbackLiveRef.current.current?.id === item.id) setImporting(null);
     }
   }
 
@@ -1035,12 +1038,13 @@ export function Player() {
         case "play": {
           setPlaying(true);
           resumeEngine();
-          if (codecAudioRef.current?.id === current?.id) startCodecAudio(codecAudioTime() ?? el.currentTime);
-          if (el === video && current?.kind === "video" && !codecAudioRef.current && !codecFallbackAttempted.current.has(current.id)) {
+          const liveTrack = playbackLiveRef.current.current;
+          if (codecAudioRef.current?.id === liveTrack?.id) startCodecAudio(codecAudioTime() ?? el.currentTime);
+          if (el === video && liveTrack?.kind === "video" && !codecAudioRef.current && !codecFallbackAttempted.current.has(liveTrack.id)) {
             window.clearTimeout(videoAudioProbeTimer.current);
-            const item = current;
+            const item = liveTrack;
             videoAudioProbeTimer.current = window.setTimeout(() => {
-              const live = current;
+              const live = playbackLiveRef.current.current;
               if (live?.id !== item.id || mediaRef.current !== video || video.paused) return;
               const decodedBytes = (video as HTMLVideoElement & { webkitAudioDecodedByteCount?: number }).webkitAudioDecodedByteCount;
               const suspiciousName = /\\.(mkv|mka|avi|ts|m2ts|mts|vob|wmv|asf|flv|f4v|rmvb|rm)$/i.test(item.name)
@@ -1051,15 +1055,15 @@ export function Player() {
           break;
         }
         case "pause":
-          if (codecAudioRef.current?.id === current?.id) pauseCodecAudio();
+          if (codecAudioRef.current?.id === playbackLiveRef.current.current?.id) pauseCodecAudio();
           setPlaying(false);
           handlers.current.onPause();
           break;
         case "timeupdate":
-          if (el === video && codecAudioRef.current?.id === current?.id) {
+          if (el === video && codecAudioRef.current?.id === playbackLiveRef.current.current?.id) {
             const state = codecAudioRef.current;
             if (state) {
-              const expected = state.offset + (state.context.currentTime - state.startedAt) * speed;
+              const expected = state.offset + (state.context.currentTime - state.startedAt) * playbackLiveRef.current.speed;
               if (Math.abs(expected - video.currentTime) > 0.18) startCodecAudio(video.currentTime);
             }
           }
@@ -1068,7 +1072,7 @@ export function Player() {
         case "loadedmetadata":
         case "durationchange": handlers.current.onMeta(el); break;
         case "ended":
-          if (codecAudioRef.current?.id === current?.id) stopCodecAudio();
+          if (codecAudioRef.current?.id === playbackLiveRef.current.current?.id) stopCodecAudio();
           handlers.current.onEnded();
           break;
         case "error": handlers.current.onError(); break;
