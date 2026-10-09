@@ -752,3 +752,57 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
   .homeHeroStats { gap: 7px; font-size: 11px; }
   .homeFeaturedArt { flex-basis: 60px; width: 60px; height: 60px; }
 }
+
+
+/* Home navigation cards: clearer hierarchy and tactile feedback */
+.tiles { grid-template-columns: repeat(auto-fit, minmax(min(100%, 156px), 1fr)); gap: 12px; }
+.tile {
+  min-height: 112px; gap: 13px; padding: 16px; overflow: hidden;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--panel2) 96%, var(--accent)), var(--panel));
+  transition: transform .2s cubic-bezier(.2,.8,.2,1), border-color .2s, background .2s, box-shadow .2s;
+}
+.tile::after {
+  content: ""; position: absolute; width: 82px; height: 82px; right: -28px; bottom: -34px;
+  border-radius: 50%; background: color-mix(in srgb, var(--accent) 7%, transparent);
+  transition: transform .25s, background .25s; pointer-events: none;
+}
+.tile > svg {
+  box-sizing: content-box; width: 20px; height: 20px; padding: 10px; border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 11%, transparent); color: var(--accent);
+  transition: transform .2s, background .2s;
+}
+.tile span { position: relative; z-index: 1; font-size: 13px; letter-spacing: -.01em; }
+.tile em {
+  top: 14px; right: 14px; z-index: 1; padding: 4px 7px; border: 1px solid #ffffff0b;
+  border-radius: 999px; background: #ffffff06; font-size: 10px; font-weight: 700;
+}
+.tile:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  background: linear-gradient(145deg, color-mix(in srgb, var(--panel2) 88%, var(--accent)), var(--panel));
+  box-shadow: 0 12px 26px #0003; transform: translateY(-3px);
+}
+.tile:hover > svg { background: color-mix(in srgb, var(--accent) 18%, transparent); transform: translateY(-1px); }
+.tile:hover::after { transform: scale(1.25); background: color-mix(in srgb, var(--accent) 11%, transparent); }
+.tile:active { transform: translateY(-1px) scale(.99); }
+.quickActions { gap: 12px; margin-bottom: 18px; }
+.quickActions .btn { min-height: 44px; }
+.sectionTitle { margin-top: 30px; margin-bottom: 12px; }
+.sectionTitle h2 { font-size: 19px; letter-spacing: -.035em; }
+.sectionTitle button { padding: 5px 0 5px 8px; border-radius: 8px; transition: color .15s; }
+.sectionTitle button:hover { color: var(--accent); }
+.albumRow { grid-auto-columns: clamp(128px, 16vw, 164px); gap: 16px; padding-bottom: 12px; }
+.albumCover .art { border-radius: 14px; }
+.albumCard b { letter-spacing: -.015em; }
+@media (max-width: 600px) {
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .tile { min-height: 100px; padding: 13px; gap: 10px; border-radius: 15px; }
+  .tile > svg { padding: 8px; border-radius: 10px; }
+  .tile em { top: 12px; right: 11px; }
+  .quickActions { gap: 8px; }
+  .quickActions .btn { padding: 10px 12px; font-size: 13px; }
+  .sectionTitle { margin-top: 25px; }
+  .albumRow { grid-auto-columns: 136px; gap: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tile, .tile::after, .tile > svg, .sectionTitle button { transition: none; }
+}
