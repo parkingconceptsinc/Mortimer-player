@@ -88,7 +88,7 @@ private fun loadMedia(context: Context, category: String, mime: String): List<Lo
 
 private fun saveMedia(context: Context, category: String, items: List<LocalMedia>) {
     context.getSharedPreferences("mortimer_library", Context.MODE_PRIVATE)
-        .edit().putStringSet(category, items.map { "\${it.uri}\t\${it.title}" }.toSet()).apply()
+        .edit().putStringSet(category, items.map { "${it.uri}\t${it.title}" }.toSet()).apply()
 }
 
 private fun rememberPermission(context: Context, uri: Uri) {
