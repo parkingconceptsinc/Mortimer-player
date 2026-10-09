@@ -235,7 +235,7 @@ private fun MortimerApp(player: ExoPlayer, openSpotify: () -> Unit, openExternal
                 "Libros" -> {
                     Button(onClick = { bookPicker.launch(arrayOf("application/epub+zip", "application/pdf", "text/plain", "*/*")) }) { Text("＋ Importar libros") }
                     if (books.isEmpty()) EmptyMessage("Importa EPUB, PDF u otros documentos. El lector integrado se desarrollará en la siguiente fase.")
-                    LazyColumn { items(books) { item -> MediaRow(item.title, "Documento seleccionado") { openExternal(item.uri, item.mime) } } }
+                    LazyColumn { items(books) { item -> MediaRow(item.title, "Documento seleccionado") {\n                            if (item.title.substringBefore("?").lowercase().endsWith(".pdf")) {\n                                runCatching { context.startActivity(Intent(context, PdfReaderActivity::class.java).apply { data = item.uri; putExtra(PdfReaderActivity.EXTRA_TITLE, item.title); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }) }\n                                    .onFailure { openExternal(item.uri, "application/pdf") }\n                            } else openExternal(item.uri, item.mime)\n                        } } }
                 }
                 "Cómics" -> {
                     Button(onClick = { comicPicker.launch(arrayOf("application/zip", "application/x-cbz", "application/pdf", "*/*")) }) { Text("＋ Importar cómics") }
