@@ -806,3 +806,267 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
 @media (prefers-reduced-motion: reduce) {
   .tile, .tile::after, .tile > svg, .sectionTitle button { transition: none; }
 }
+
+
+/* ---------- Cinematic Now Playing: premium listening experience ---------- */
+.nowPlaying:not(.videoMode) {
+  isolation: isolate;
+  background:
+    radial-gradient(ellipse at 50% 12%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 42%),
+    linear-gradient(180deg, #0d0c12 0%, #09090e 46%, var(--bg) 100%);
+}
+.nowPlaying:not(.videoMode)::before {
+  background:
+    radial-gradient(ellipse at 50% 4%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 44%),
+    linear-gradient(180deg, #09090a12 0%, #07070ae8 84%);
+}
+.nowPlaying:not(.videoMode) .npBackdrop::before {
+  filter: blur(84px) saturate(1.35) brightness(.31);
+  transform: scale(1.42);
+}
+.nowPlaying:not(.videoMode) .npTop {
+  min-height: 52px;
+  margin: 0 -8px;
+  padding-bottom: 8px;
+}
+.nowPlaying:not(.videoMode) .npSource small {
+  color: color-mix(in srgb, var(--accent) 82%, white);
+  font-size: 9px;
+  letter-spacing: .2em;
+}
+.nowPlaying:not(.videoMode) .npSource b {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 650;
+  color: #e9e7ef;
+}
+.nowPlaying:not(.videoMode) .npStage {
+  padding: clamp(12px, 2.8vh, 28px) 0 clamp(16px, 3vh, 30px);
+}
+.nowPlaying:not(.videoMode) .npArtWrap {
+  position: relative;
+  isolation: isolate;
+  width: min(100%, max(210px, calc(100dvh - 570px)), 440px);
+}
+.nowPlaying:not(.videoMode) .npArtWrap::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 8% 5% -3%;
+  border-radius: 28px;
+  background: var(--cover) center / cover no-repeat;
+  filter: blur(34px) saturate(1.35);
+  opacity: .34;
+  transform: scale(.94);
+  transition: opacity .45s ease, transform .45s ease;
+}
+.nowPlaying:not(.videoMode) .npArtWrap.playing::before {
+  opacity: .56;
+  transform: scale(1.02);
+}
+.nowPlaying:not(.videoMode) .npArt {
+  border-radius: 20px;
+  box-shadow: 0 34px 80px #000c, 0 0 0 1px #ffffff20, 0 1px 0 #ffffff24 inset;
+}
+.nowPlaying:not(.videoMode) .npArtWrap:not(.playing) .npArt {
+  transform: scale(.965);
+}
+.nowPlaying:not(.videoMode) .npInfo {
+  gap: 14px;
+  margin-top: 2px;
+  padding: 4px 0 2px;
+}
+.nowPlaying:not(.videoMode) .npTitles h1 {
+  font-size: clamp(22px, 3vw, 29px);
+  line-height: 1.12;
+  letter-spacing: -.045em;
+  font-weight: 800;
+  text-shadow: 0 2px 22px #0006;
+}
+.nowPlaying:not(.videoMode) .npTitles p {
+  margin-top: 7px;
+  color: #c2becb;
+  font-size: 14px;
+  line-height: 1.35;
+}
+.nowPlaying:not(.videoMode) .seek {
+  margin-top: 16px;
+}
+.nowPlaying:not(.videoMode) .seekRange::-webkit-slider-runnable-track {
+  height: 4px;
+  background: linear-gradient(to right, var(--accent) var(--pct), #ffffff2b var(--pct));
+}
+.nowPlaying:not(.videoMode) .seekRange::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 15%, transparent), 0 1px 7px #0009;
+}
+.nowPlaying:not(.videoMode) .seekTimes {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #a5a1b0;
+  letter-spacing: .015em;
+}
+.nowPlaying:not(.videoMode) .npControls {
+  max-width: 390px;
+  margin-top: 12px;
+  gap: 12px;
+}
+.nowPlaying:not(.videoMode) .npControls > .iconBtn {
+  color: #d6d2de;
+}
+.nowPlaying:not(.videoMode) .npControls > .iconBtn:hover {
+  background: #ffffff12;
+  color: #fff;
+}
+.nowPlaying:not(.videoMode) .npControls .playBtn {
+  width: 68px;
+  height: 68px;
+  background: linear-gradient(145deg, #ffb08e 0%, var(--accent) 58%, #ed603b 100%);
+  box-shadow: 0 10px 34px color-mix(in srgb, var(--accent) 30%, transparent), 0 1px 0 #ffffff70 inset;
+  transition: transform .2s cubic-bezier(.2,.8,.2,1), filter .2s, box-shadow .2s;
+}
+.nowPlaying:not(.videoMode) .npControls .playBtn:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 14px 42px color-mix(in srgb, var(--accent) 38%, transparent), 0 1px 0 #ffffff70 inset;
+  transform: translateY(-1px);
+}
+.nowPlaying:not(.videoMode) .npTools {
+  gap: 6px;
+  margin-top: 18px;
+  padding-bottom: 6px;
+}
+.nowPlaying:not(.videoMode) .npTools .toolBtn {
+  min-width: 56px;
+  padding: 9px 7px;
+  gap: 6px;
+  border: 1px solid #ffffff0a;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff0d, #ffffff06);
+  color: #c8c4d0;
+  transition: background .18s, border-color .18s, color .18s, transform .18s;
+}
+.nowPlaying:not(.videoMode) .npTools .toolBtn:hover {
+  border-color: #ffffff20;
+  background: #ffffff12;
+  color: #fff;
+  transform: translateY(-1px);
+}
+.nowPlaying:not(.videoMode) .npTools .toolBtn.on {
+  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+  background: color-mix(in srgb, var(--accent) 13%, #111118);
+  color: #ffad8d;
+}
+.nowPlaying:not(.videoMode) .npVolume {
+  margin-top: 14px;
+  color: #bdb8c7;
+}
+.nowPlaying:not(.videoMode) .npVolume .range::-webkit-slider-runnable-track {
+  height: 3px;
+}
+.nowPlaying:not(.videoMode) .npNext {
+  margin-top: 18px;
+  padding: 10px 13px 10px 10px;
+  border-color: #ffffff14;
+  border-radius: 16px;
+  background: linear-gradient(110deg, #ffffff0c, #ffffff05);
+  box-shadow: 0 8px 28px #0002, 0 1px 0 #ffffff08 inset;
+  backdrop-filter: blur(16px);
+}
+.nowPlaying:not(.videoMode) .npNext:hover {
+  background: linear-gradient(110deg, #ffffff12, #ffffff07);
+  border-color: color-mix(in srgb, var(--accent) 32%, #ffffff14);
+  transform: translateY(-1px);
+}
+.nowPlaying:not(.videoMode) .npNextArt {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px #0005;
+}
+.nowPlaying:not(.videoMode) .npNext small {
+  font-size: 9px;
+  letter-spacing: .18em;
+  color: color-mix(in srgb, var(--accent) 72%, #c9c4d1);
+}
+.nowPlaying:not(.videoMode) .npNext b {
+  margin-top: 3px;
+  font-size: 13px;
+  letter-spacing: -.01em;
+}
+.nowPlaying:not(.videoMode) .npNext em {
+  color: #aaa5b4;
+  font-size: 11px;
+}
+.nowPlaying:not(.videoMode) .iconBtn.on {
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+}
+@media (min-width: 900px) {
+  .nowPlaying:not(.videoMode) {
+    padding-top: 8px;
+    padding-bottom: 26px;
+  }
+  .nowPlaying:not(.videoMode) .npStage {
+    padding-top: 12px;
+    padding-bottom: 24px;
+  }
+  .nowPlaying:not(.videoMode) .npArtWrap {
+    width: min( min(42vw, 430px), max(230px, calc(100dvh - 575px)));
+  }
+  .nowPlaying:not(.videoMode) .npInfo,
+  .nowPlaying:not(.videoMode) .seek,
+  .nowPlaying:not(.videoMode) .npControls,
+  .nowPlaying:not(.videoMode) .npVolume,
+  .nowPlaying:not(.videoMode) .npNext {
+    max-width: 470px;
+  }
+}
+@media (max-width: 600px) {
+  .nowPlaying:not(.videoMode) {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+  .nowPlaying:not(.videoMode) .npArtWrap {
+    width: min(100%, max(205px, calc(100dvh - 555px)), 390px);
+  }
+  .nowPlaying:not(.videoMode) .npArt {
+    border-radius: 18px;
+  }
+  .nowPlaying:not(.videoMode) .npInfo {
+    gap: 8px;
+  }
+  .nowPlaying:not(.videoMode) .npTitles h1 {
+    font-size: clamp(20px, 6vw, 25px);
+  }
+  .nowPlaying:not(.videoMode) .npControls .playBtn {
+    width: 64px;
+    height: 64px;
+  }
+  .nowPlaying:not(.videoMode) .npTools {
+    margin-right: -18px;
+    margin-left: -18px;
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+}
+@media (max-height: 720px) and (min-width: 601px) {
+  .nowPlaying:not(.videoMode) .npStage {
+    padding-top: 4px;
+    padding-bottom: 8px;
+  }
+  .nowPlaying:not(.videoMode) .npArtWrap {
+    width: min(100%, max(160px, calc(100dvh - 565px)), 340px);
+  }
+  .nowPlaying:not(.videoMode) .npTools {
+    margin-top: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nowPlaying:not(.videoMode) .npArtWrap::before,
+  .nowPlaying:not(.videoMode) .npControls .playBtn,
+  .nowPlaying:not(.videoMode) .npTools .toolBtn,
+  .nowPlaying:not(.videoMode) .npNext {
+    transition: none;
+  }
+}
