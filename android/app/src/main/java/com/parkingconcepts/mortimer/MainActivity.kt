@@ -164,9 +164,9 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
     val books = remember { mutableStateListOf<LocalMedia>().apply { addAll(loadMedia(context, "books", "*/*")) } }
     val comics = remember { mutableStateListOf<LocalMedia>().apply { addAll(loadMedia(context, "comics", "*/*")) } }
     var section by remember { mutableStateOf("Inicio") }
-    var currentTitle by remember { mutableStateOf("Nada se está reproduciendo") }
+    var currentTitle by remember { mutableStateOf(player.currentMediaItem?.mediaMetadata?.title?.toString() ?: "Nada se está reproduciendo") }
     var currentVideoUri by remember { mutableStateOf<Uri?>(null) }
-    var isPlaying by remember { mutableStateOf(false) }
+    var isPlaying by remember { mutableStateOf(player.isPlaying) }
 
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         uris.forEach { uri ->
@@ -238,7 +238,7 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                 "Mi música" -> {
                     Button(onClick = { audioPicker.launch(arrayOf("audio/*")) }, colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF111114))) { Text("＋ Añadir música") }
                     if (audio.isEmpty()) EmptyMessage("Elige archivos de audio del teléfono, una tarjeta SD o una memoria USB.")
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         items(audio) { item ->
                             MediaRow(item.title, "Audio local") {
                                 currentTitle = item.title
@@ -280,7 +280,7 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                 "Libros" -> {
                     Button(onClick = { bookPicker.launch(arrayOf("application/epub+zip", "application/pdf", "text/plain", "*/*")) }) { Text("＋ Importar libros") }
                     if (books.isEmpty()) EmptyMessage("Importa EPUB, PDF u otros documentos. Elige un PDF o EPUB para leerlo dentro de Mortimer Player.")
-                    LazyColumn { items(books) { item -> MediaRow(item.title, "Documento seleccionado") {
+                    LazyColumn(modifier = Modifier.weight(1f)) { items(books) { item -> MediaRow(item.title, "Documento seleccionado") {
                             val lowerTitle = item.title.substringBefore("?").lowercase()
                             when {
                                 lowerTitle.endsWith(".pdf") -> runCatching {
@@ -303,7 +303,7 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                 "Cómics" -> {
                     Button(onClick = { comicPicker.launch(arrayOf("application/zip", "application/x-cbz", "application/pdf", "*/*")) }) { Text("＋ Importar cómics") }
                     if (comics.isEmpty()) EmptyMessage("Importa archivos CBZ para leerlos aquí. CBR requiere una aplicación compatible.")
-                    LazyColumn { items(comics) { item ->
+                    LazyColumn(modifier = Modifier.weight(1f)) { items(comics) { item ->
                         MediaRow(item.title, "Archivo de cómic") {
                             if (item.title.substringBefore("?").lowercase().endsWith(".cbz")) {
                                 runCatching {
@@ -324,8 +324,9 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                     Text("REPRODUCIENDO", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
                     Text(currentTitle, color = MainText, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
-                        Button(onClick = { if (player.isPlaying) player.pause() else player.play() }, colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF111114))) { Text(if (isPlaying) "Ⅱ Pausar" else "▶ Reproducir") }
-                        Button(onClick = { if (player.hasNextMediaItem()) player.seekToNextMediaItem() }, colors = ButtonDefaults.buttonColors(containerColor = Panel2)) { Text("Siguiente") }
+                        Button(onClick = { if (player.hasPreviousMediaItem()) player.seekToPreviousMediaItem() }, enabled = player.hasPreviousMediaItem(), colors = ButtonDefaults.buttonColors(containerColor = Panel2)) { Text("Anterior") }
+                        Button(onClick = { if (player.isPlaying) player.pause() else player.play() }, enabled = player.currentMediaItem != null, colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF111114))) { Text(if (isPlaying) "Ⅱ Pausar" else "▶ Reproducir") }
+                        Button(onClick = { if (player.hasNextMediaItem()) player.seekToNextMediaItem() }, enabled = player.hasNextMediaItem(), colors = ButtonDefaults.buttonColors(containerColor = Panel2)) { Text("Siguiente") }
                     }
                 }
             }
