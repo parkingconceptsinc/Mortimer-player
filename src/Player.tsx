@@ -119,6 +119,7 @@ export function Player() {
   const [videoProgress, setVideoProgress] = usePref<Record<string, number>>("videoProgress", {});
   const [comics, setComics] = useState<Comic[]>([]);
   const comicsLiveRef = useRef<Comic[]>([]);
+  const importGenerationRef = useRef(0);
   const [comicProgress, setComicProgress] = usePref<Record<string, ComicProgress>>("comicProgress", {});
   const [readerSettings, setReaderSettings] = usePref<ReaderSettings>("readerSettings", DEFAULT_READER);
   const [reader, setReader] = useState<{ id: string; start: number | null } | null>(null);
@@ -424,6 +425,8 @@ export function Player() {
   }
 
   async function performImportEntries(entries: Incoming[], label?: string) {
+    const importGeneration = importGenerationRef.current;
+    const isImportCurrent = () => importGenerationRef.current === importGeneration;
     // Read current library refs when a queued import starts, not the render that queued it.
     const seen = new Set([...tracksLiveRef.current, ...comicsLiveRef.current].map((t) => trackKey(t.path, t.size, t.lastModified)));
     const isNew = ({ file, path }: Incoming) => {
@@ -450,6 +453,7 @@ export function Player() {
     if (freshComics.length) {
       const comicBatchSize = 50;
       for (let start = 0; start < freshComics.length; start += comicBatchSize) {
+        if (!isImportCurrent()) return;
         const end = Math.min(start + comicBatchSize, freshComics.length);
         const items: StoredComic[] = freshComics.slice(start, end).map(({ file, path }, offset) => ({
           id: crypto.randomUUID(), name: file.name, path, size: file.size, lastModified: file.lastModified,
@@ -458,6 +462,10 @@ export function Player() {
         let savedItems = items;
         if (comicStorageOk) {
           try { savedItems = await saveComics(items); } catch { comicStorageOk = false; }
+        }
+        if (!isImportCurrent()) {
+          if (savedItems.length) await deleteComics(savedItems.map((item) => item.id)).catch(() => {});
+          return;
         }
         if (savedItems.length) setComics((old) => [...old, ...savedItems.map(toComic)]);
         processed += items.length;
@@ -470,9 +478,14 @@ export function Player() {
       const items = batch;
       batch = [];
       if (!items.length) return;
+      if (!isImportCurrent()) return;
       let savedItems = items;
       if (libraryStorageOk) {
         try { savedItems = await saveLibrary(items); } catch { libraryStorageOk = false; }
+      }
+      if (!isImportCurrent()) {
+        if (savedItems.length) await deleteTracks(savedItems.map((item) => item.id)).catch(() => {});
+        return;
       }
       if (savedItems.length) setTracks((old) => [...old, ...savedItems.map(toTrack)]);
 
@@ -499,6 +512,7 @@ export function Player() {
     let importFailures = 0;
     const importBatchSize = 50;
     for (let start = 0; start < fresh.length; start += importBatchSize) {
+      if (!isImportCurrent()) return;
       const end = Math.min(start + importBatchSize, fresh.length);
       const results = await Promise.allSettled(
         fresh.slice(start, end).map((entry, offset) => readItem(entry, addedAt + start + offset)),
@@ -513,8 +527,10 @@ export function Player() {
       processed += results.length;
       setImporting({ done: processed, total: totalToAdd, label: "Adding" });
       await flush();
+      if (!isImportCurrent()) return;
     }
     await flush();
+    if (!isImportCurrent()) return;
     setImporting(null);
     const parts = [
       importedMedia ? `${importedMedia} song${importedMedia === 1 ? "" : "s"}/video${importedMedia === 1 ? "" : "s"}` : "",
@@ -804,7 +820,12 @@ export function Player() {
     removeFromLibrary,
     clearLibrary() {
       void (async () => {
+        // Invalidate any folder/file import already in flight.
+        importGenerationRef.current++;
         try {
+          await clearStoredLibrary();
+          // Wait for any in-flight IndexedDB writes, then clear again so they cannot resurrect items.
+          await mediaImportQueue.catch(() => {});
           await clearStoredLibrary();
         } catch {
           toast("Couldn't clear local storage");
