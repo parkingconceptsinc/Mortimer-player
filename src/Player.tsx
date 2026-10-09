@@ -147,10 +147,10 @@ export function Player() {
   const trackMap = useMemo(() => new Map(tracks.map((t) => [t.id, t])), [tracks]);
   const favorites = useMemo(() => new Set(favoritesList), [favoritesList]);
   const current = trackMap.get(queue[qIndex] ?? "");
-  const playbackLiveRef = useRef<{ current: Track | undefined; speed: number; ab: { a: number | null; b: number | null }; muted: boolean; volume: number; sleepFade: number }>({ current, speed, ab, muted, volume, sleepFade });
-  playbackLiveRef.current = { current, speed, ab, muted, volume, sleepFade };
   const sleepRemaining = sleep.endsAt ? Math.max(0, sleep.endsAt - now) / 1000 : null;
   const sleepFade = sleepRemaining != null && sleepRemaining < 15 ? sleepRemaining / 15 : 1;
+  const playbackLiveRef = useRef<{ current: Track | undefined; speed: number; ab: { a: number | null; b: number | null }; muted: boolean; volume: number; sleepFade: number }>({ current, speed, ab, muted, volume, sleepFade });
+  playbackLiveRef.current = { current, speed, ab, muted, volume, sleepFade };
 
   function toast(message: string) {
     setToastMessage(message);
@@ -230,7 +230,7 @@ export function Player() {
     void state.context.resume().catch(() => {});
     source.onended = () => {
       const live = codecAudioRef.current;
-      if (live?.id === playbackLiveRef.current.current?.id && live.source === source && live.buffer.duration > 0) {
+      if (live && live.id === playbackLiveRef.current.current?.id && live.source === source && live.buffer.duration > 0) {
         finishCodecAudio(live.id);
       }
     };
@@ -238,7 +238,8 @@ export function Player() {
     window.clearInterval(codecTickTimer.current);
     codecTickTimer.current = window.setInterval(() => {
       const live = codecAudioRef.current;
-      if (!live || live.id !== playbackLiveRef.current.current?.id || live.source !== source) return;
+      if (live == null) return;
+      if (live.id !== playbackLiveRef.current.current?.id || live.source !== source) return;
       const t = codecAudioTime();
       if (t == null) return;
       setCurrentTime(t);
