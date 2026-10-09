@@ -1,4 +1,4 @@
-const CACHE = "six-shell-v9";
+const CACHE = "six-shell-v10";
 const BASE = "/Mortimer-player/";
 const BUILD_ASSETS = [];
 const SHELL = [
@@ -51,7 +51,7 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith(
     staticAsset || wasmAsset
-      ? caches.match(request).then((cached) => cached || fetch(request).then(cacheResponse))
+      ? fetch(request, { cache: "no-cache" }).then(cacheResponse).catch(() => caches.match(request))
       : fetch(request).then(cacheResponse).catch(() =>
           caches.match(request).then((cached) => cached || caches.match(BASE))
         )
