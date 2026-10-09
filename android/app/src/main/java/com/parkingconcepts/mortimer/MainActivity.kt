@@ -152,6 +152,12 @@ private fun MortimerApp(player: ExoPlayer, openSpotify: () -> Unit, openExternal
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val uri = mediaItem?.localConfiguration?.uri
+                currentTitle = audio.firstOrNull { it.uri == uri }?.title
+                    ?: mediaItem?.mediaMetadata?.title?.toString()
+                    ?: "Nada se está reproduciendo"
+            }
         }
         player.addListener(listener)
         onDispose { player.removeListener(listener) }
@@ -188,7 +194,8 @@ private fun MortimerApp(player: ExoPlayer, openSpotify: () -> Unit, openExternal
                         items(audio) { item ->
                             MediaRow(item.title, "Audio local") {
                                 currentTitle = item.title
-                                player.setMediaItem(MediaItem.fromUri(item.uri))
+                                val selectedIndex = audio.indexOf(item).coerceAtLeast(0)
+                                player.setMediaItems(audio.map { MediaItem.fromUri(it.uri) }, selectedIndex, 0L)
                                 player.prepare()
                                 player.play()
                             }
