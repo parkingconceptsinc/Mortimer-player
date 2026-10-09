@@ -68,27 +68,38 @@ export const albumKey = (t: Track) => `${albumOf(t)}\u0000${t.albumArtist || t.f
 export const trackKey = (path: string, size: number, lastModified: number) => `${path}|${size}|${lastModified}`;
 
 export function toTrack(x: StoredLibraryItem): Track {
-  return {
-    id: x.id,
-    name: x.name,
-    title: x.title || stripExt(x.name),
-    artist: x.artist || "",
-    album: x.album || "",
-    albumArtist: x.albumArtist || "",
-    genre: x.genre || "",
-    year: x.year,
-    trackNo: x.trackNo,
-    duration: x.duration,
-    kind: x.kind,
-    size: x.size,
-    lastModified: x.lastModified,
-    path: x.path,
-    folder: folderOf(x.path),
-    addedAt: x.addedAt ?? x.lastModified,
-    metaVersion: x.metaVersion ?? 0,
-    url: URL.createObjectURL(x.file),
-    cover: x.cover ? URL.createObjectURL(x.cover) : undefined,
-  };
+  const url = URL.createObjectURL(x.file);
+  let cover: string | undefined;
+  try {
+    cover = x.cover ? URL.createObjectURL(x.cover) : undefined;
+    return {
+      id: x.id,
+      name: x.name,
+      title: x.title || stripExt(x.name),
+      artist: x.artist || "",
+      album: x.album || "",
+      albumArtist: x.albumArtist || "",
+      genre: x.genre || "",
+      year: x.year,
+      trackNo: x.trackNo,
+      duration: x.duration,
+      kind: x.kind,
+      size: x.size,
+      lastModified: x.lastModified,
+      path: x.path,
+      folder: folderOf(x.path),
+      addedAt: x.addedAt ?? x.lastModified,
+      metaVersion: x.metaVersion ?? 0,
+      url,
+      cover,
+    };
+  } catch (error) {
+    // If cover creation or malformed metadata aborts conversion, release any
+    // object URLs already allocated for this item before rethrowing.
+    URL.revokeObjectURL(url);
+    if (cover) URL.revokeObjectURL(cover);
+    throw error;
+  }
 }
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });

@@ -1186,7 +1186,17 @@ export function Player() {
         const { id, file: _file, ...patch } = item;
         return patchTrack(id, patch).catch(() => {});
       }));
-      const restored = [...uniqueStored.values()].map(toTrack).sort((a, b) => a.addedAt - b.addedAt);
+      const restored = [...uniqueStored.values()].flatMap((item) => {
+        try {
+          return [toTrack(item)];
+        } catch {
+          // Keep a damaged entry in IndexedDB so a later recovery can still inspect it.
+          return [];
+        }
+      }).sort((a, b) => a.addedAt - b.addedAt);
+      if (restored.length !== uniqueStored.size) {
+        toast("Some saved music items could not be restored; their files remain in local storage");
+      }
       const ids = new Set(restored.map((t) => t.id));
       const savedQueue = readPref<string[]>("queue", []);
       const savedIndex = readPref("qIndex", 0);
@@ -1233,7 +1243,20 @@ export function Player() {
         const { id, file: _file, ...patch } = item;
         return patchComic(id, patch).catch(() => {});
       }));
-      if (!cancelled) setComics([...uniqueStored.values()].map(toComic).sort((a, b) => a.addedAt - b.addedAt));
+      if (!cancelled) {
+        const restoredBooks = [...uniqueStored.values()].flatMap((item) => {
+          try {
+            return [toComic(item)];
+          } catch {
+            // Skip only this item; retain its original data in IndexedDB.
+            return [];
+          }
+        }).sort((a, b) => a.addedAt - b.addedAt);
+        if (restoredBooks.length !== uniqueStored.size) {
+          toast("Some saved books or comics could not be restored; their files remain in local storage");
+        }
+        setComics(restoredBooks);
+      }
     }).catch(() => {
       if (!cancelled) toast("Local books and comics storage is unavailable in this browser");
     });
