@@ -195,6 +195,7 @@ export function Player() {
     if (!state) return;
     const time = codecAudioTime();
     if (time != null) state.offset = time;
+    state.startedAt = state.context.currentTime;
     const source = state.source;
     state.source = null;
     source?.disconnect();
