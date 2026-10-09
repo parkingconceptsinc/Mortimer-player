@@ -37,7 +37,7 @@ class ComicReaderActivity : Activity() {
             pages = zip!!.entries().asSequence()
                 .filter { !it.isDirectory && it.name.substringAfterLast('.', "").lowercase() in IMAGE_EXTENSIONS }
                 .map { it.name }
-                .sortedWith(String.CASE_INSENSITIVE_ORDER)
+                .sortedWith(compareBy<String> { naturalSortKey(it) }.thenBy { it.lowercase() })
                 .toList()
             check(pages.isNotEmpty()) { "El CBZ no contiene páginas de imagen compatibles." }
 
@@ -106,6 +106,9 @@ class ComicReaderActivity : Activity() {
         archive?.delete()
         super.onDestroy()
     }
+
+    private fun naturalSortKey(path: String): String =
+        Regex("""\d+""").replace(path.lowercase()) { match -> match.value.padStart(12, '0') }
 
     companion object {
         const val EXTRA_TITLE = "comic_title"
