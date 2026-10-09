@@ -1,6 +1,7 @@
 package com.parkingconcepts.mortimer
 
 import android.content.Intent
+import android.content.ComponentName
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.os.Bundle
@@ -33,7 +34,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.MoreExecutors
 
 private val Bg = Color(0xFF07070A)
 private val Panel = Color(0xFF121218)
@@ -43,18 +47,46 @@ private val MainText = Color(0xFFF4F4F6)
 private val Muted = Color(0xFF8F8F9C)
 
 class MainActivity : ComponentActivity() {
-    private var player: ExoPlayer? = null
+    private var controllerFuture: ListenableFuture<MediaController>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        player = ExoPlayer.Builder(this).build()
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(
                 background = Bg, surface = Panel, primary = Accent,
                 onBackground = MainText, onSurface = MainText
             )) {
-                MortimerApp(player = player!!, openSpotify = { launchSpotify() }, openExternal = { uri, mime -> openExternal(uri, mime) })
+                Surface(Modifier.fillMaxSize(), color = Bg) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Iniciando Mortimer Player…", color = MainText)
+                    }
+                }
             }
+        }
+        val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
+        controllerFuture = MediaController.Builder(this, token).buildAsync().also { future ->
+            future.addListener({
+                runCatching { future.get() }.onSuccess { controller ->
+                    if (!isFinishing && !isDestroyed) {
+                        setContent {
+                            MaterialTheme(colorScheme = darkColorScheme(
+                                background = Bg, surface = Panel, primary = Accent,
+                                onBackground = MainText, onSurface = MainText
+                            )) {
+                                MortimerApp(player = controller, openSpotify = { launchSpotify() }, openExternal = { uri, mime -> openExternal(uri, mime) })
+                            }
+                        }
+                    }
+                }.onFailure {
+                    if (!isFinishing && !isDestroyed) {
+                        setContent {
+                            Surface(Modifier.fillMaxSize(), color = Bg) {
+                                Text("No se pudo iniciar el reproductor. Cierra y vuelve a abrir Mortimer Player.", color = MainText, modifier = Modifier.padding(24.dp))
+                            }
+                        }
+                    }
+                }
+            }, MoreExecutors.directExecutor())
         }
     }
 
@@ -74,8 +106,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        player?.release()
-        player = null
+        controllerFuture?.let { MediaController.releaseFuture(it) }
+        controllerFuture = null
         super.onDestroy()
     }
 }
@@ -113,7 +145,7 @@ private fun rememberPermission(context: Context, uri: Uri) {
 }
 
 @Composable
-private fun MortimerApp(player: ExoPlayer, openSpotify: () -> Unit, openExternal: (Uri, String) -> Unit) {
+private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (Uri, String) -> Unit) {
     val context = LocalContext.current
     val audioPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(Unit) {
