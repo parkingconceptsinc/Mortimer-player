@@ -585,7 +585,14 @@ export function Player() {
     const nextQueue = queue.filter((id) => !gone.has(id));
     if (currentId && gone.has(currentId)) {
       wantPlay.current = false;
-      mediaRef.current?.pause();
+      stopCodecAudio();
+      for (const el of [audioRef.current, videoRef.current]) {
+        if (!el) continue;
+        el.pause();
+        el.removeAttribute("src");
+        el.load();
+      }
+      mediaRef.current = null;
       const before = queue.slice(0, qIndex).filter((id) => !gone.has(id)).length;
       setQIndex(Math.min(before, Math.max(0, nextQueue.length - 1)));
     } else {
@@ -792,6 +799,14 @@ export function Player() {
           return;
         }
         clearQueue();
+        // Detach media sources before revoking their object URLs.
+        for (const el of [audioRef.current, videoRef.current]) {
+          if (!el) continue;
+          el.pause();
+          el.removeAttribute("src");
+          el.load();
+        }
+        mediaRef.current = null;
         setTracks((old) => {
           for (const t of old) {
             URL.revokeObjectURL(t.url);
