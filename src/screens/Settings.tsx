@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ChevronRight, Download, FilePlus, FolderOpen, HardDrive, Keyboard, ListMusic, SlidersHorizontal, Trash2 } from "lucide-react";
+import { ChevronRight, Download, FilePlus, FolderOpen, HardDrive, Keyboard, ListMusic, SlidersHorizontal, Sun, Trash2 } from "lucide-react";
 import { usePlayer } from "../context";
 import { ScreenHeader, Toggle } from "../components";
 import type { VideoFit } from "../types";
@@ -10,7 +10,7 @@ const SHORTCUTS: Array<[string, string]> = [
   ["N / P", "Next / previous"], ["M", "Mute"], ["S", "Shuffle"], ["R", "Repeat mode"], ["[ / ] / =", "Slower / faster / normal speed"], ["F", "Video fullscreen"],
 ];
 
-export function Settings() {
+export function Settings({ theme, onThemeChange }: { theme: "dark" | "light"; onThemeChange: (theme: "dark" | "light") => void }) {
   const p = usePlayer();
   const { actions } = p;
   const [storage, setStorage] = useState<{ usage?: number; quota?: number; persisted?: boolean }>({});
@@ -60,6 +60,9 @@ export function Settings() {
       </Card>
 
       <Card title="Appearance">
+        <Row label="Color theme" hint="Choose a light or dark interface">
+          <Chips values={["dark", "light"] as const} current={theme} format={(v) => v === "dark" ? "Dark" : "Light"} onPick={onThemeChange} />
+        </Row>
         <Row label="Accent color">
           <div className="swatches">
             {Object.entries(ACCENTS).map(([name, color]) => (
