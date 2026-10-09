@@ -494,7 +494,11 @@ export function Player() {
       for (const item of savedItems) {
         if (item.kind !== "audio") continue;
         enqueueMetadata(async () => {
+          // Skip queued work if the track was removed before its metadata job began.
+          if (!tracksLiveRef.current.some((track) => track.id === item.id)) return;
           const tags = await readTags(item.file, item.name);
+          // The user may remove the track while tags are being decoded.
+          if (!tracksLiveRef.current.some((track) => track.id === item.id)) return;
           if (libraryStorageOk) await patchTrack(item.id, { ...tags, metaVersion: META_VERSION }).catch(() => {});
           setTracks((old) => {
             const live = old.find((track) => track.id === item.id);
