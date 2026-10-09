@@ -750,6 +750,8 @@ export function Player() {
       toast(ids.length === 1 ? "Added to queue" : `${ids.length} tracks added to queue`);
     },
     removeFromQueue(index) {
+      if (index < 0 || index >= queue.length) return;
+      const removedId = queue[index];
       const nextQueue = queue.filter((_, i) => i !== index);
       if (!nextQueue.length) return clearQueue();
       if (index === qIndex) {
@@ -759,6 +761,14 @@ export function Player() {
         setQIndex(qIndex - 1);
       }
       setQueue(nextQueue);
+      // Keep the pre-shuffle queue in sync, including duplicate track IDs.
+      setOriginalQueue((original) => {
+        if (!original) return original;
+        const originalIndex = original.indexOf(removedId);
+        return originalIndex < 0
+          ? original
+          : [...original.slice(0, originalIndex), ...original.slice(originalIndex + 1)];
+      });
     },
     moveInQueue(from, to) {
       if (to < 0 || to >= queue.length || from === to) return;
