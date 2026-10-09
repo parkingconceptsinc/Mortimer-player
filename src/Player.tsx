@@ -739,8 +739,15 @@ export function Player() {
     },
     playNext(ids) {
       if (!queue.length) return playTracks(ids);
+      const currentId = queue[qIndex];
       setQueue((q) => [...q.slice(0, qIndex + 1), ...ids, ...q.slice(qIndex + 1)]);
-      setOriginalQueue((q) => q && [...q, ...ids]);
+      setOriginalQueue((original) => {
+        if (!original) return original;
+        const currentIndex = original.indexOf(currentId);
+        return currentIndex < 0
+          ? [...original, ...ids]
+          : [...original.slice(0, currentIndex + 1), ...ids, ...original.slice(currentIndex + 1)];
+      });
       toast(ids.length === 1 ? "Will play next" : `${ids.length} tracks will play next`);
     },
     addToQueue(ids) {
