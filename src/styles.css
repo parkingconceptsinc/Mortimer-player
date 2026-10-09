@@ -1077,3 +1077,36 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
 .library:has(.homeHero) > .sectionTitle:has(+ .albumRow) + .albumRow {
   display: none;
 }
+
+
+/* Audio home variant: botanical cannabis-leaf ornament, without a featured album card. */
+.homeHero {
+  justify-content: flex-start;
+  background:
+    radial-gradient(ellipse at 8% 0%, color-mix(in srgb, var(--accent) 15%, transparent), transparent 54%),
+    linear-gradient(125deg, color-mix(in srgb, var(--panel2) 94%, var(--accent)), var(--panel));
+}
+.homeFeatured { display: none !important; }
+.homeHero::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: clamp(190px, 30vw, 340px);
+  height: clamp(190px, 30vw, 340px);
+  right: clamp(-54px, 3vw, 26px);
+  top: 50%;
+  transform: translateY(-50%) rotate(-12deg);
+  opacity: .20;
+  pointer-events: none;
+  background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 240' fill='none' stroke='%2393c572' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M120 218V88 M120 156L83 118 M120 178L157 137 M120 130L55 75 M120 115L177 57 M120 94L105 28 M120 94L137 22'/%3E%3Cpath d='M120 94C91 85 77 57 78 29C101 35 117 54 120 94Z M120 94C149 80 162 51 158 23C137 32 122 55 120 94Z M120 115C85 113 58 94 44 65C75 66 103 84 120 115Z M120 115C155 108 182 83 192 53C162 59 136 82 120 115Z M120 156C87 154 61 138 47 112C78 112 104 129 120 156Z M120 156C151 149 174 128 187 101C158 105 135 127 120 156Z M120 178C93 181 72 197 60 220C88 215 109 199 120 178Z M120 178C145 181 166 197 178 220C150 215 131 199 120 178Z'/%3E%3C/svg%3E");
+}
+.homeHeroCopy { position: relative; z-index: 1; }
+@media (max-width: 700px) {
+  .homeHero::after {
+    width: 210px;
+    height: 210px;
+    right: -58px;
+    top: 35%;
+    opacity: .15;
+  }
+}
