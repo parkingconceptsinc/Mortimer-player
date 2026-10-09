@@ -79,6 +79,34 @@ export function ComicReader() {
   }, [comic, actions]);
 
   useEffect(() => {
+    // Page URLs belong to one document only. Never carry a page number's URL
+    // across a comic switch, and release the old document's cached resources.
+    for (const url of urlsRef.current.values()) URL.revokeObjectURL(url);
+    urlsRef.current = new Map();
+    setUrls(new Map());
+    for (const url of thumbs.current.values()) URL.revokeObjectURL(url);
+    thumbs.current.clear();
+    loading.current.clear();
+    sourceRef.current = null;
+    setSource(null);
+    setFailed(new Set());
+    setError(null);
+    setOpenProgress(0);
+    setShowEnd(false);
+    setZoom(Z0);
+    setDx(0);
+    setAnimating(false);
+    pendingTurn.current = null;
+    window.clearTimeout(turnFallback.current);
+    turnFallback.current = undefined;
+    setPage(() => {
+      if (readerStart != null) return readerStart;
+      const saved = comic ? comicProgress[comic.id] : undefined;
+      return saved && saved.page < saved.pages - 1 ? saved.page : 0;
+    });
+  }, [comic?.id]);
+
+  useEffect(() => {
     if (!comic) return;
     let cancelled = false;
     let opened: ComicSource | null = null;
@@ -96,7 +124,7 @@ export function ComicReader() {
       if (sourceRef.current === opened) sourceRef.current = null;
       opened?.close();
     };
-  }, [comic?.id]);
+  }, [comic?.id, readerStart]);
 
   useEffect(() => () => {
     for (const url of urlsRef.current.values()) URL.revokeObjectURL(url);
