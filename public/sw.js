@@ -51,7 +51,10 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith(
     staticAsset || wasmAsset
-      ? fetch(request, { cache: "no-cache" }).then(cacheResponse).catch(() => caches.match(request))
+      ? caches.match(request).then((cached) => {
+          if (cached) return cached;
+          return fetch(request).then(cacheResponse);
+        })
       : fetch(request).then(cacheResponse).catch(() =>
           caches.match(request).then((cached) => cached || caches.match(BASE))
         )
