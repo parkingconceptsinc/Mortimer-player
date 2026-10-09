@@ -286,6 +286,9 @@ export function Player() {
       const decoded = await decodeAudioTrack(await response.blob());
       if (playbackLiveRef.current.current?.id !== item.id || (item.kind === "video" ? videoRef.current !== el : audioRef.current !== el)) {
         void decoded.context.close().catch(() => {});
+        // The fallback was abandoned because playback moved to another item.
+        // Allow a retry if the user returns to this track later.
+        codecFallbackAttempted.current.delete(item.id);
         return false;
       }
       const gain = decoded.context.createGain();
