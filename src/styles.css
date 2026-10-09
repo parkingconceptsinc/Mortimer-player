@@ -1079,7 +1079,7 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
 }
 
 
-/* Audio home variant: botanical cannabis-leaf ornament, without a featured album card. */
+/* Audio home variant: no featured album card. */
 .homeHero {
   justify-content: flex-start;
   background:
@@ -1087,51 +1087,12 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
     linear-gradient(125deg, color-mix(in srgb, var(--panel2) 94%, var(--accent)), var(--panel));
 }
 .homeFeatured { display: none !important; }
-.homeHero::after {
-  content: "";
-  position: absolute;
-  z-index: 0;
-  width: clamp(190px, 30vw, 340px);
-  height: clamp(190px, 30vw, 340px);
-  right: clamp(-54px, 3vw, 26px);
-  top: 50%;
-  transform: translateY(-50%) rotate(-8deg);
-  opacity: .24;
-  pointer-events: none;
-  background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 240' fill='none' stroke='%239ed477' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M120 224V76 M120 156L91 127 M120 171L151 139 M120 135L67 82 M120 112L167 61 M120 92L113 26 M120 92L137 30 M120 156L78 168'/%3E%3Cpath d='M120 92C98 77 93 48 113 17C130 43 131 68 120 92Z M120 92C145 70 158 44 137 19C123 43 118 68 120 92Z M120 112C88 108 62 85 57 52C88 62 108 84 120 112Z M120 112C151 102 178 79 183 46C153 58 132 83 120 112Z M120 135C88 132 55 115 35 84C70 88 101 106 120 135Z M120 135C153 128 185 108 204 77C170 83 139 105 120 135Z M120 156C91 153 67 164 52 190C84 188 107 174 120 156Z M120 156C149 153 173 164 188 190C156 188 133 174 120 156Z'/%3E%3C/svg%3E");
-}
 .homeHeroCopy { position: relative; z-index: 1; }
-@media (max-width: 700px) {
-  .homeHero::after {
-    width: 210px;
-    height: 210px;
-    right: -58px;
-    top: 35%;
-    opacity: .15;
-  }
-}
-
-
-/* Correct botanical ornament: recognizable serrated cannabis fan-leaf, with theme-matched glow. */
+/* Accent-aware button lighting without decorative artwork. */ recognizable serrated cannabis fan-leaf, with theme-matched glow. */
 .btn, .tile, .quickActions .btn {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-}
-.btn::before, .tile::before {
-  content: "";
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-  pointer-events: none;
-  opacity: .16;
-  background-image:
-    linear-gradient(115deg, color-mix(in srgb, var(--accent) 16%, transparent), transparent 68%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120' fill='none' stroke='%23a7d982' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M60 111V44 M60 78L43 62 M60 86L77 68 M60 68L34 42 M60 59L82 31 M60 49L57 14 M60 49L68 18 M60 78L35 83'/%3E%3Cpath d='M60 49C48 39 46 25 57 9C66 23 65 37 60 49Z M60 49C73 37 80 24 68 10C61 24 59 37 60 49Z M60 59C42 58 28 45 24 25C42 31 54 43 60 59Z M60 59C77 54 92 41 96 21C78 28 66 42 60 59Z M60 68C43 67 25 59 14 43C34 44 49 53 60 68Z M60 68C78 65 97 54 106 36C86 40 70 52 60 68Z M60 78C46 77 33 81 25 94C42 94 53 87 60 78Z M60 78C74 77 87 81 95 94C78 94 67 87 60 78Z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat, no-repeat;
-  background-position: center, right 9px center;
-  background-size: auto, 58px 58px;
-  transition: opacity .2s ease, filter .2s ease;
 }
 .btn > *, .tile > * { position: relative; z-index: 1; }
 .btn::after {
@@ -1156,7 +1117,6 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 9%, transparent),
     0 0 12px color-mix(in srgb, var(--accent) 8%, transparent);
 }
-.btn:hover::before, .tile:hover::before { opacity: .32; filter: saturate(1.25); }
 .btn:hover {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent),
@@ -1167,11 +1127,6 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent),
     0 0 22px color-mix(in srgb, var(--accent) 42%, transparent),
     0 0 40px color-mix(in srgb, var(--accent) 24%, transparent);
-}
-.tile::before {
-  opacity: .23;
-  background-size: auto, 68px 68px;
-  background-position: center, right 12px bottom 8px;
 }
 .tile {
   border-color: color-mix(in srgb, var(--accent) 17%, var(--line));
@@ -1186,5 +1141,5 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
   box-shadow: 0 0 13px color-mix(in srgb, var(--accent) 26%, transparent);
 }
 @media (prefers-reduced-motion: reduce) {
-  .btn::before, .btn::after { transition: none; }
+  .btn::after { transition: none; }
 }
