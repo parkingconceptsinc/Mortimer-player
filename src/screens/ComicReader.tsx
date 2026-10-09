@@ -434,7 +434,7 @@ export function ComicReader() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (sheet || (e.target as HTMLElement | null)?.closest("input:not([type=range]), select, textarea")) return;
+      if (sheet || (e.target as HTMLElement | null)?.closest("button, input, select, textarea, a, [contenteditable=\"true\"]")) return;
       const keys: Record<string, () => void> = {
         ArrowRight: () => (vertical ? logical(1) : visual(1)),
         ArrowLeft: () => (vertical ? logical(-1) : visual(-1)),
