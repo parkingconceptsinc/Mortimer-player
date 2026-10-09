@@ -142,6 +142,7 @@ export function Player() {
   const [menu, setMenu] = useState<MenuTarget | null>(null);
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [thumbTick, setThumbTick] = useState(0);
+  const swipeStart = useRef<{ x: number; y: number } | null>(null);
 
   tracksLiveRef.current = tracks;
   comicsLiveRef.current = comics;
@@ -1674,6 +1675,31 @@ export function Player() {
   const progress = useMemo(() => ({ currentTime, duration }), [currentTime, duration]);
   const accentColor = ACCENTS[accent] ?? ACCENTS.Coral;
 
+  const swipeScreens: Screen[] = ["library", "videos", "books", "comics"];
+  function handleSwipeStart(event: React.TouchEvent<HTMLElement>) {
+    const target = event.target as HTMLElement;
+    if (reader || menu || target.closest("button, a, input, textarea, select, video, audio, [contenteditable], .albumRow, .npTools, .range, .comicReader, .epubReader, .textReader, [data-no-swipe]")) {
+      swipeStart.current = null;
+      return;
+    }
+    const touch = event.changedTouches[0];
+    swipeStart.current = { x: touch.clientX, y: touch.clientY };
+  }
+  function handleSwipeEnd(event: React.TouchEvent<HTMLElement>) {
+    const start = swipeStart.current;
+    swipeStart.current = null;
+    if (!start || reader || menu) return;
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
+    const index = swipeScreens.indexOf(screen);
+    if (index < 0) return;
+    const nextIndex = dx < 0 ? index + 1 : index - 1;
+    if (nextIndex < 0 || nextIndex >= swipeScreens.length) return;
+    actions.goTo(swipeScreens[nextIndex]);
+  }
+
   return (
     <PlayerContext.Provider value={state}>
       <ProgressContext.Provider value={progress}>
@@ -1697,7 +1723,7 @@ export function Player() {
             </div>
           </aside>
 
-          <main className="main">
+          <main className="main" onTouchStart={handleSwipeStart} onTouchEnd={handleSwipeEnd} onTouchCancel={() => { swipeStart.current = null; }}>
             <Library active={screen === "library"} />
             <NowPlaying active={screen === "player"} />
             {screen === "videos" && <Videos />}
