@@ -1112,7 +1112,7 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
 }
 
 
-/* Botanical button finish: cannabis-leaf engraving + accent-aware backlighting. */
+/* Correct botanical ornament: recognizable serrated cannabis fan-leaf, with theme-matched glow. */
 .btn, .tile, .quickActions .btn {
   position: relative;
   isolation: isolate;
@@ -1121,22 +1121,23 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
 .btn::before, .tile::before {
   content: "";
   position: absolute;
-  z-index: -1;
+  z-index: 0;
   inset: 0;
   pointer-events: none;
-  opacity: .18;
-  background:
-    linear-gradient(115deg, color-mix(in srgb, var(--accent) 22%, transparent), transparent 68%),
-    center / 54px 54px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80' fill='none' stroke='%23a4d68a' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M40 73V31 M40 49L26 36 M40 56L54 43 M40 39L20 21 M40 34L51 12 M40 34L34 9'/%3E%3Cpath d='M40 34C28 30 23 19 24 8C34 12 39 20 40 34Z M40 34C52 29 57 18 55 7C46 12 41 21 40 34Z M40 39C29 39 20 32 16 22C27 23 36 29 40 39Z M40 39C52 36 62 28 65 18C54 21 45 29 40 39Z M40 49C29 48 22 43 18 34C29 35 36 41 40 49Z M40 49C50 47 57 40 61 31C51 33 45 40 40 49Z'/%3E%3C/svg%3E");
-  background-position: right 8px center;
-  background-repeat: no-repeat;
-  background-size: auto, 54px 54px;
+  opacity: .16;
+  background-image:
+    linear-gradient(115deg, color-mix(in srgb, var(--accent) 16%, transparent), transparent 68%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120' fill='none' stroke='%23a7d982' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M60 111V44 M60 78L43 62 M60 86L77 68 M60 68L34 42 M60 59L82 31 M60 49L57 14 M60 49L68 18 M60 78L35 83'/%3E%3Cpath d='M60 49C48 39 46 25 57 9C66 23 65 37 60 49Z M60 49C73 37 80 24 68 10C61 24 59 37 60 49Z M60 59C42 58 28 45 24 25C42 31 54 43 60 59Z M60 59C77 54 92 41 96 21C78 28 66 42 60 59Z M60 68C43 67 25 59 14 43C34 44 49 53 60 68Z M60 68C78 65 97 54 106 36C86 40 70 52 60 68Z M60 78C46 77 33 81 25 94C42 94 53 87 60 78Z M60 78C74 77 87 81 95 94C78 94 67 87 60 78Z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat, no-repeat;
+  background-position: center, right 9px center;
+  background-size: auto, 58px 58px;
   transition: opacity .2s ease, filter .2s ease;
 }
+.btn > *, .tile > * { position: relative; z-index: 1; }
 .btn::after {
   content: "";
   position: absolute;
-  z-index: -1;
+  z-index: 0;
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
@@ -1155,7 +1156,7 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 9%, transparent),
     0 0 12px color-mix(in srgb, var(--accent) 8%, transparent);
 }
-.btn:hover::before, .tile:hover::before { opacity: .38; filter: saturate(1.2); }
+.btn:hover::before, .tile:hover::before { opacity: .32; filter: saturate(1.25); }
 .btn:hover {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent),
@@ -1168,9 +1169,9 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
     0 0 40px color-mix(in srgb, var(--accent) 24%, transparent);
 }
 .tile::before {
-  opacity: .26;
+  opacity: .23;
   background-size: auto, 68px 68px;
-  background-position: right 12px bottom 8px;
+  background-position: center, right 12px bottom 8px;
 }
 .tile {
   border-color: color-mix(in srgb, var(--accent) 17%, var(--line));
