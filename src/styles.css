@@ -1088,7 +1088,7 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
 }
 .homeFeatured { display: none !important; }
 .homeHeroCopy { position: relative; z-index: 1; }
-/* Accent-aware button lighting without decorative artwork. */ recognizable serrated cannabis fan-leaf, with theme-matched glow. */
+/* Accent-aware button lighting without decorative artwork. */
 .btn, .tile, .quickActions .btn {
   position: relative;
   isolation: isolate;
