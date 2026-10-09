@@ -114,6 +114,7 @@ export function Player() {
   const [subtitleSize, setSubtitleSize] = usePref("subtitleSize", 100);
   const [showRemaining, setShowRemaining] = usePref("showRemaining", false);
   const [accent, setAccent] = usePref("accent", "Neon Red");
+  const [theme, setTheme] = usePref<"dark" | "light">("theme", "dark");
   const [songSort, setSongSort] = usePref<SongSort>("songSort", "title");
   const [favoritesList, setFavoritesList] = usePref<string[]>("favorites", []);
   const [videoProgress, setVideoProgress] = usePref<Record<string, number>>("videoProgress", {});
@@ -144,6 +145,11 @@ export function Player() {
 
   tracksLiveRef.current = tracks;
   comicsLiveRef.current = comics;
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+  }, [theme]);
 
   useEffect(() => () => {
     if (subtitleUrlRef.current) URL.revokeObjectURL(subtitleUrlRef.current);
@@ -1699,7 +1705,7 @@ export function Player() {
             {screen === "comics" && <Comics shelfOverride="comics" />}
             {screen === "queue" && <Queue />}
             {screen === "eq" && <Equalizer />}
-            {screen === "settings" && <Settings />}
+            {screen === "settings" && <Settings theme={theme} onThemeChange={setTheme} />}
           </main>
 
           <MiniPlayer />
