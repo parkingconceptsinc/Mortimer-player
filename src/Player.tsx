@@ -806,12 +806,33 @@ export function Player() {
         return;
       }
       if (originalQueue) {
-        const remaining = new Set(queue);
-        const base = originalQueue.filter((id) => remaining.has(id));
-        const baseSet = new Set(base);
-        const restored = [...base, ...queue.filter((id) => !baseSet.has(id))];
+        // Restore only as many copies of each track as still exist in the live queue.
+        // A Set loses multiplicity, so duplicate track IDs could otherwise reappear.
+        const remaining = new Map<string, number>();
+        for (const id of queue) remaining.set(id, (remaining.get(id) ?? 0) + 1);
+        const base = originalQueue.filter((id) => {
+          const count = remaining.get(id) ?? 0;
+          if (count <= 0) return false;
+          remaining.set(id, count - 1);
+          return true;
+        });
+        const restored = [...base];
+        for (const id of queue) {
+          const count = remaining.get(id) ?? 0;
+          if (count > 0) {
+            restored.push(id);
+            remaining.set(id, count - 1);
+          }
+        }
+        const currentOccurrence = queue.slice(0, qIndex + 1).filter((id) => id === currentId).length;
+        let seenCurrent = 0;
+        const restoredIndex = restored.findIndex((id) => {
+          if (id !== currentId) return false;
+          seenCurrent += 1;
+          return seenCurrent === currentOccurrence;
+        });
         setQueue(restored);
-        setQIndex(Math.max(0, restored.indexOf(currentId)));
+        setQIndex(Math.max(0, restoredIndex));
       }
       setOriginalQueue(null);
       setShuffle(false);
