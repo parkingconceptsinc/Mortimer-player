@@ -262,7 +262,6 @@ function Home({ lib }: { lib: Lib }) {
       <section className="homeHero" aria-label="Library overview">
         <div className="homeHeroGlow" />
         <div className="homeHeroCopy">
-          <span className="homeEyebrow"><Disc3 size={14} /> YOUR COLLECTION</span>
           <h2>Your sound.<br />Your space.</h2>
           <p>Your music, albums and favorites — all together, ready when you are.</p>
           <div className="homeHeroStats">
