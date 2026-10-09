@@ -190,6 +190,20 @@ export function Player() {
     handlers.current.onEnded();
   }
 
+  function pauseCodecAudio() {
+    const state = codecAudioRef.current;
+    if (!state) return;
+    const time = codecAudioTime();
+    if (time != null) state.offset = time;
+    const source = state.source;
+    state.source = null;
+    source?.disconnect();
+    try { source?.stop(); } catch {}
+    window.clearInterval(codecTickTimer.current);
+    codecTickTimer.current = undefined;
+    void state.context.suspend().catch(() => {});
+  }
+
   function codecAudioTime() {
     const state = codecAudioRef.current;
     if (!state) return null;
@@ -1036,7 +1050,8 @@ export function Player() {
           break;
         }
         case "pause":
-                setPlaying(false);
+          if (codecAudioRef.current?.id === current?.id) pauseCodecAudio();
+          setPlaying(false);
           handlers.current.onPause();
           break;
         case "timeupdate":
