@@ -243,7 +243,7 @@ private fun MortimerApp(player: ExoPlayer, openSpotify: () -> Unit, openExternal
                 }
                 "Libros" -> {
                     Button(onClick = { bookPicker.launch(arrayOf("application/epub+zip", "application/pdf", "text/plain", "*/*")) }) { Text("＋ Importar libros") }
-                    if (books.isEmpty()) EmptyMessage("Importa EPUB, PDF u otros documentos. El lector integrado se desarrollará en la siguiente fase.")
+                    if (books.isEmpty()) EmptyMessage("Importa EPUB, PDF u otros documentos. Elige un PDF o EPUB para leerlo dentro de Mortimer Player.")
                     LazyColumn { items(books) { item -> MediaRow(item.title, "Documento seleccionado") {
                             val lowerTitle = item.title.substringBefore("?").lowercase()
                             when {
