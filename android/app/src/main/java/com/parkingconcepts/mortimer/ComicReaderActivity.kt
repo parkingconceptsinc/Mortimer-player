@@ -25,13 +25,13 @@ class ComicReaderActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val title = intent.getStringExtra(EXTRA_TITLE) ?: "Cómic"
+        val title = intent.getStringExtra(EXTRA_TITLE) ?: "Comic"
         try {
-            val uri = intent.data ?: error("No se recibió el archivo.")
+            val uri = intent.data ?: error("No file was provided.")
             archive = File(cacheDir, "comic_${System.currentTimeMillis()}.cbz").also { target ->
                 contentResolver.openInputStream(uri)?.use { input ->
                     target.outputStream().use(input::copyTo)
-                } ?: error("No se pudo leer el archivo.")
+                } ?: error("Could not read the file.")
             }
             zip = ZipFile(archive!!)
             pages = zip!!.entries().asSequence()
@@ -39,7 +39,7 @@ class ComicReaderActivity : Activity() {
                 .map { it.name }
                 .sortedWith(compareBy<String> { naturalSortKey(it) }.thenBy { it.lowercase() })
                 .toList()
-            check(pages.isNotEmpty()) { "El CBZ no contiene páginas de imagen compatibles." }
+            check(pages.isNotEmpty()) { "This CBZ contains no supported image pages." }
 
             val root = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -67,8 +67,8 @@ class ComicReaderActivity : Activity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER
             }
-            controls.addView(Button(this).apply { text = "← Anterior"; setOnClickListener { showPage(pageIndex - 1) } })
-            controls.addView(Button(this).apply { text = "Siguiente →"; setOnClickListener { showPage(pageIndex + 1) } })
+            controls.addView(Button(this).apply { text = "← Previous"; setOnClickListener { showPage(pageIndex - 1) } })
+            controls.addView(Button(this).apply { text = "Next →"; setOnClickListener { showPage(pageIndex + 1) } })
             root.addView(heading)
             root.addView(status)
             root.addView(image)
@@ -76,7 +76,7 @@ class ComicReaderActivity : Activity() {
             setContentView(root)
             showPage(0)
         } catch (error: Exception) {
-            Toast.makeText(this, error.message ?: "No se pudo abrir el cómic.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, error.message ?: "Could not open the comic.", Toast.LENGTH_LONG).show()
             finish()
         }
     }
@@ -94,11 +94,11 @@ class ComicReaderActivity : Activity() {
             bounds.outHeight / (sample * 2) >= targetHeight) sample *= 2
         val bitmap = zip!!.getInputStream(entry).use { stream ->
             BitmapFactory.decodeStream(stream, null, BitmapFactory.Options().apply { inSampleSize = sample })
-        } ?: error("No se pudo decodificar la página.")
+        } ?: error("Could not decode the page.")
         val oldBitmap = (image.drawable as? BitmapDrawable)?.bitmap
         image.setImageBitmap(bitmap)
         if (oldBitmap != null && oldBitmap !== bitmap && !oldBitmap.isRecycled) oldBitmap.recycle()
-        status.text = "Página ${pageIndex + 1} de ${pages.size}"
+        status.text = "Page ${pageIndex + 1} of ${pages.size}"
     }
 
     override fun onDestroy() {
