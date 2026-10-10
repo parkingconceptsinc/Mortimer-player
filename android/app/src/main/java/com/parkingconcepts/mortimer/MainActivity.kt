@@ -292,33 +292,55 @@ private fun savePlaylists(context: Context, playlists: List<LocalPlaylist>) {
 
 private fun collectFolderMedia(context: Context, root: DocumentFile): List<Pair<String, LocalMedia>> {
     val found = mutableListOf<Pair<String, LocalMedia>>()
-    fun walk(directory: DocumentFile, parentPath: String) {
-        directory.listFiles().forEach { child ->
-            if (child.isDirectory) {
-                walk(child, listOf(parentPath, child.name.orEmpty()).filter(String::isNotBlank).joinToString("/"))
-            } else if (child.isFile) {
-                val name = child.name ?: return@forEach
-                val lower = name.lowercase()
-                val extension = lower.substringAfterLast('.', "")
-                val category = when {
-                    extension in AUDIO_EXTENSIONS || child.type?.startsWith("audio/") == true -> "audio"
-                    extension in VIDEO_EXTENSIONS || child.type?.startsWith("video/") == true -> "videos"
-                    extension in setOf("cbz", "cbr") -> "comics"
-                    extension in BOOK_EXTENSIONS || child.type == "application/pdf" || child.type == "text/plain" -> "books"
-                    else -> null
-                } ?: return@forEach
-                val mime = child.type ?: mimeForExtension(extension)
-                found += category to LocalMedia(
-                    uri = child.uri,
-                    title = name.substringBeforeLast('.', name),
-                    mime = mime,
-                    folder = parentPath,
-                    addedAt = System.currentTimeMillis()
-                )
+    // An iterative walk avoids stack overflow on deeply nested folders. URI tracking also
+    // prevents revisiting a provider directory if it exposes the same node more than once.
+    val pending = java.util.ArrayDeque<Pair<DocumentFile, String>>()
+    val visitedDirectories = mutableSetOf<String>()
+    pending.addLast(root to root.name.orEmpty())
+
+    while (pending.isNotEmpty()) {
+        val (directory, parentPath) = pending.removeFirst()
+        if (!visitedDirectories.add(directory.uri.toString())) continue
+
+        // Some document providers deny access to individual folders. Skip only that subtree
+        // rather than aborting the entire library import.
+        val children = try {
+            directory.listFiles().toList()
+        } catch (_: Exception) {
+            continue
+        }
+
+        children.forEach { child ->
+            try {
+                if (child.isDirectory) {
+                    val childPath = listOf(parentPath, child.name.orEmpty())
+                        .filter(String::isNotBlank).joinToString("/")
+                    pending.addLast(child to childPath)
+                } else if (child.isFile) {
+                    val name = child.name ?: return@forEach
+                    val lower = name.lowercase()
+                    val extension = lower.substringAfterLast('.', "")
+                    val category = when {
+                        extension in AUDIO_EXTENSIONS || child.type?.startsWith("audio/") == true -> "audio"
+                        extension in VIDEO_EXTENSIONS || child.type?.startsWith("video/") == true -> "videos"
+                        extension in setOf("cbz", "cbr") -> "comics"
+                        extension in BOOK_EXTENSIONS || child.type == "application/pdf" || child.type == "text/plain" -> "books"
+                        else -> null
+                    } ?: return@forEach
+                    val mime = child.type ?: mimeForExtension(extension)
+                    found += category to LocalMedia(
+                        uri = child.uri,
+                        title = name.substringBeforeLast('.', name),
+                        mime = mime,
+                        folder = parentPath,
+                        addedAt = System.currentTimeMillis()
+                    )
+                }
+            } catch (_: Exception) {
+                // Ignore one malformed or inaccessible item and keep scanning siblings.
             }
         }
     }
-    walk(root, root.name.orEmpty())
     return found
 }
 
