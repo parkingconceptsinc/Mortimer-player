@@ -78,7 +78,7 @@ class PlaybackService : MediaLibraryService() {
                     .setMediaMetadata(
                         MediaMetadata.Builder()
                             .setTitle(title)
-                            .setArtist("Audio local")
+                            .setArtist("Local audio")
                             .setIsBrowsable(false)
                             .setIsPlayable(true)
                             .build()
@@ -162,7 +162,7 @@ class PlaybackService : MediaLibraryService() {
                             .setMediaMetadata(
                                 MediaMetadata.Builder()
                                     .setTitle(displayName(uri))
-                                    .setArtist("Audio local")
+                                    .setArtist("Local audio")
                                     .setIsBrowsable(false)
                                     .setIsPlayable(true)
                                     .build()
