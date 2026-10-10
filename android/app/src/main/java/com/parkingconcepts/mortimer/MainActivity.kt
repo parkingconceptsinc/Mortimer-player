@@ -849,6 +849,50 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                     } }
                 }
             }
+            if (showCreatePlaylist) {
+                AlertDialog(
+                    onDismissRequest = { showCreatePlaylist = false },
+                    title = { Text("Create playlist") },
+                    text = {
+                        OutlinedTextField(
+                            value = draftPlaylistName,
+                            onValueChange = { draftPlaylistName = it },
+                            label = { Text("Playlist name") },
+                            singleLine = true
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            val name = draftPlaylistName.trim()
+                            if (name.isNotEmpty()) {
+                                val seededUris = when {
+                                    musicView == "Favorites" -> favorites.toList()
+                                    musicView == "Recent" -> recentTracks.toList()
+                                    selectedGroup != null && musicView == "Artists" ->
+                                        audio.filter { it.artist.ifBlank { "Unknown artist" } == selectedGroup }.map { it.uri.toString() }
+                                    selectedGroup != null && musicView == "Albums" ->
+                                        audio.filter { "${it.album.ifBlank { "Unknown album" }} — ${it.artist.ifBlank { "Unknown artist" }}" == selectedGroup }.map { it.uri.toString() }
+                                    selectedGroup != null && musicView == "Folders" ->
+                                        audio.filter { (it.folder.ifBlank { it.uri.pathSegments.dropLast(1).takeLast(2).joinToString("/").ifBlank { "Imported files" } }) == selectedGroup }.map { it.uri.toString() }
+                                    musicView == "Playlists" -> emptyList()
+                                    else -> audio.map { it.uri.toString() }
+                                }.distinct()
+                                val newPlaylist = LocalPlaylist("playlist_${System.currentTimeMillis()}", name, seededUris)
+                                playlists = playlists + newPlaylist
+                                savePlaylists(context, playlists)
+                                musicView = "Playlists"
+                                activePlaylistId = newPlaylist.id
+                                selectedGroup = null
+                                libraryScanStatus = "Created playlist: $name"
+                            }
+                            showCreatePlaylist = false
+                        }) { Text("Create") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showCreatePlaylist = false }) { Text("Cancel") }
+                    }
+                )
+            }
             if (section == "Home" || section == "Services") Spacer(Modifier.weight(1f))
             Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                 Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
