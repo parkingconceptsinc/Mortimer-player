@@ -563,19 +563,34 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
             Text(section, color = MainText, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold)
             Text("Your media library", color = Muted, fontSize = 14.sp)
             Spacer(Modifier.height(18.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                NavChip("Home", section == "Home") { section = "Home" }
-                NavChip("Music", section == "Music") { section = "Music" }
-                NavChip("Services", section == "Services") { section = "Services" }
+            val navSections = listOf("Home", "Music", "Videos", "Books", "Comics", "Services")
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                items(navSections) { destination ->
+                    NavChip(destination, section == destination) {
+                        if (section != destination) {
+                            selectedGroup = null
+                            activePlaylistId = null
+                            section = destination
+                        }
+                    }
+                }
             }
             Spacer(Modifier.height(14.dp))
             AnimatedContent(
                 targetState = section,
                 transitionSpec = {
-                    (fadeIn(animationSpec = tween(220)) +
-                        slideInHorizontally(animationSpec = tween(220)) { fullWidth -> fullWidth / 10 }) togetherWith
-                        (fadeOut(animationSpec = tween(150)) +
-                            slideOutHorizontally(animationSpec = tween(150)) { fullWidth -> -fullWidth / 12 })
+                    val forward = navSections.indexOf(targetState) >= navSections.indexOf(initialState)
+                    if (forward) {
+                        (fadeIn(animationSpec = tween(220)) +
+                            slideInHorizontally(animationSpec = tween(220)) { width -> width / 10 }) togetherWith
+                            (fadeOut(animationSpec = tween(160)) +
+                                slideOutHorizontally(animationSpec = tween(160)) { width -> -width / 12 })
+                    } else {
+                        (fadeIn(animationSpec = tween(220)) +
+                            slideInHorizontally(animationSpec = tween(220)) { width -> -width / 10 }) togetherWith
+                            (fadeOut(animationSpec = tween(160)) +
+                                slideOutHorizontally(animationSpec = tween(160)) { width -> width / 12 })
+                    }
                 },
                 label = "section-transition"
             ) { targetSection ->
