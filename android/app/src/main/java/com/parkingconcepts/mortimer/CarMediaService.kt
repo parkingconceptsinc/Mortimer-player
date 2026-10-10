@@ -43,9 +43,21 @@ class CarMediaService : MediaBrowserServiceCompat() {
             )
             setCallback(object : MediaSessionCompat.Callback() {
                 override fun onPlay() {
-                    player.play()
+                    // Android Auto may send Play before a track has been selected.
+                    // Seed the player with the first available item instead of playing an empty queue.
+                    if (player.mediaItemCount == 0) {
+                        val first = allAudioUris().firstOrNull()
+                        if (first != null) {
+                            metadataFor(first)?.let(session::setMetadata)
+                            player.setMediaItem(MediaItem.fromUri(first))
+                            player.prepare()
+                        }
+                    }
+                    if (player.mediaItemCount > 0) player.play()
                     updatePlaybackState()
-                    startForeground(NOTIFICATION_ID, buildNotification("Playing music"))
+                    if (player.mediaItemCount > 0) {
+                        startForeground(NOTIFICATION_ID, buildNotification(session.controller.metadata?.description?.title?.toString() ?: "Playing music"))
+                    }
                 }
 
                 override fun onPause() {
