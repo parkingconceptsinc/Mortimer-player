@@ -52,13 +52,12 @@ class EpubReaderActivity : Activity() {
             }.toMap()
             val spine = Regex("""<itemref\b[^>]*\bidref\s*=\s*["']([^"']+)["'][^>]*/?>""", RegexOption.IGNORE_CASE)
                 .findAll(opf).mapNotNull { manifest[it.groupValues[1]] }.toList()
+            // Keep only chapter paths and lightweight labels in memory. Load chapter text on demand.
             chapters = spine.mapNotNull { path ->
-                val entry = zip!!.getEntry(path) ?: return@mapNotNull null
-                val html = zip!!.getInputStream(entry).bufferedReader().use { it.readText() }
-                val title = Regex("""<title[^>]*>(.*?)</title>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
-                    .find(html)?.groupValues?.get(1)?.replace(Regex("<[^>]+>"), "")?.trim()?.takeIf { it.isNotEmpty() }
-                    ?: path.substringAfterLast('/')
-                path to "$title\n\n" + htmlToText(html)
+                if (zip!!.getEntry(path) == null) return@mapNotNull null
+                val label = path.substringAfterLast('/').substringBeforeLast('.')
+                    .replace(Regex("[-_]"), " ").ifBlank { "Chapter" }
+                path to label
             }
             check(chapters.isNotEmpty()) { "This EPUB contains no supported chapters." }
             buildLayout()
@@ -110,13 +109,24 @@ class EpubReaderActivity : Activity() {
             getSharedPreferences("reading_progress", MODE_PRIVATE).edit()
                 .putInt(readingProgressKey(uri), chapterIndex).apply()
         }
-        val content = chapters[chapterIndex].second
-        val split = content.indexOf("\n\n")
-        heading.text = "Chapter ${chapterIndex + 1} of ${chapters.size}"
-        previousChapter.isEnabled = chapterIndex > 0
-        nextChapter.isEnabled = chapterIndex < chapters.lastIndex
-        body.text = content.substring(0, split) + "\n\n" + content.substring(split + 2)
-        scroll.scrollTo(0, 0)
+        val (path, label) = chapters[chapterIndex]
+        try {
+            val entry = zip?.getEntry(path) ?: error("Chapter file is missing.")
+            val html = zip!!.getInputStream(entry).bufferedReader().use { it.readText() }
+            val title = Regex("""<title[^>]*>(.*?)</title>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+                .find(html)?.groupValues?.get(1)?.replace(Regex("<[^>]+>"), "")?.trim()?.takeIf { it.isNotEmpty() }
+                ?: label
+            heading.text = "$title  ·  ${chapterIndex + 1} of ${chapters.size}"
+            previousChapter.isEnabled = chapterIndex > 0
+            nextChapter.isEnabled = chapterIndex < chapters.lastIndex
+            body.text = htmlToText(html)
+            scroll.scrollTo(0, 0)
+        } catch (error: Exception) {
+            heading.text = "Chapter ${chapterIndex + 1} could not be loaded"
+            body.text = error.message ?: "The chapter could not be read."
+            previousChapter.isEnabled = chapterIndex > 0
+            nextChapter.isEnabled = chapterIndex < chapters.lastIndex
+        }
     }
 
     private fun readingProgressKey(uri: Uri): String = "epub_${uri.toString().hashCode()}"
