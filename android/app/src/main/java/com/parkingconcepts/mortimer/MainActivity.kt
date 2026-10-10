@@ -33,6 +33,7 @@ import androidx.core.content.ContextCompat
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackException
 import androidx.media3.session.MediaController
@@ -217,7 +218,8 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                 playbackError = null
                 val uri = mediaItem?.localConfiguration?.uri
                 currentTitle = audio.firstOrNull { it.uri == uri }?.title
-                    ?: mediaItem?.mediaMetadata?.title?.toString()
+                    ?: videos.firstOrNull { it.uri == uri }?.title
+                    ?: mediaItem?.mediaMetadata?.title?.toString()?.takeIf { it.isNotBlank() }
                     ?: "Nothing is playing"
             }
         }
@@ -258,7 +260,24 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                                 currentTitle = item.title
                                 currentVideoUri = null
                                 val selectedIndex = audio.indexOf(item).coerceAtLeast(0)
-                                player.setMediaItems(audio.map { MediaItem.fromUri(it.uri) }, selectedIndex, 0L)
+                                player.setMediaItems(
+                                    audio.map { track ->
+                                        MediaItem.Builder()
+                                            .setMediaId(track.uri.toString())
+                                            .setUri(track.uri)
+                                            .setMediaMetadata(
+                                                MediaMetadata.Builder()
+                                                    .setTitle(track.title)
+                                                    .setArtist("Local audio")
+                                                    .setIsBrowsable(false)
+                                                    .setIsPlayable(true)
+                                                    .build()
+                                            )
+                                            .build()
+                                    },
+                                    selectedIndex,
+                                    0L
+                                )
                                 player.prepare()
                                 player.play()
                             }
@@ -277,7 +296,19 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                             MediaRow(item.title, "Local video") {
                                 currentTitle = item.title
                                 currentVideoUri = item.uri
-                                player.setMediaItem(MediaItem.fromUri(item.uri))
+                                player.setMediaItem(
+                                    MediaItem.Builder()
+                                        .setMediaId(item.uri.toString())
+                                        .setUri(item.uri)
+                                        .setMediaMetadata(
+                                            MediaMetadata.Builder()
+                                                .setTitle(item.title)
+                                                .setIsBrowsable(false)
+                                                .setIsPlayable(true)
+                                                .build()
+                                        )
+                                        .build()
+                                )
                                 player.prepare()
                                 player.play()
                             }
