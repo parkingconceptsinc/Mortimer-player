@@ -164,7 +164,7 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
     val videos = remember { mutableStateListOf<LocalMedia>().apply { addAll(loadMedia(context, "videos", "video/*")) } }
     val books = remember { mutableStateListOf<LocalMedia>().apply { addAll(loadMedia(context, "books", "*/*")) } }
     val comics = remember { mutableStateListOf<LocalMedia>().apply { addAll(loadMedia(context, "comics", "*/*")) } }
-    var section by remember { mutableStateOf("Inicio") }
+    var section by remember { mutableStateOf("Home") }
     var currentTitle by remember { mutableStateOf(player.currentMediaItem?.mediaMetadata?.title?.toString() ?: "Nothing is playing") }
     var currentVideoUri by remember { mutableStateOf<Uri?>(null) }
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
@@ -234,13 +234,13 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
             Text("Your media library", color = Muted, fontSize = 14.sp)
             Spacer(Modifier.height(18.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                NavChip("Inicio", section == "Inicio") { section = "Inicio" }
+                NavChip("Home", section == "Home") { section = "Home" }
                 NavChip("Music", section == "Music") { section = "Music" }
                 NavChip("Services", section == "Services") { section = "Services" }
             }
             Spacer(Modifier.height(14.dp))
             when (section) {
-                "Inicio" -> {
+                "Home" -> {
                     Text("YOUR LIBRARY", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
                     Spacer(Modifier.height(8.dp))
                     HomeCard("♫", "Music", "Files from your phone, SD card, or USB drive", audio.size.toString() + " files") { section = "Music" }
@@ -274,7 +274,7 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                     if (videos.isEmpty()) EmptyMessage("Select videos from your device, SD card, or USB drive.")
                     LazyColumn(modifier = Modifier.weight(1f)) {
                         items(videos) { item ->
-                            MediaRow(item.title, "Video local") {
+                            MediaRow(item.title, "Local video") {
                                 currentTitle = item.title
                                 currentVideoUri = item.uri
                                 player.setMediaItem(MediaItem.fromUri(item.uri))
