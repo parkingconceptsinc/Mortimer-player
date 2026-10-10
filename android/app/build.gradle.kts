@@ -36,6 +36,7 @@ dependencies {
     implementation(platform("androidx.compose:compose-bom:2025.01.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.animation:animation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.media:media:1.7.0")
     implementation("androidx.media3:media3-exoplayer:1.6.1")
