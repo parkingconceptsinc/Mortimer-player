@@ -27,17 +27,17 @@ class EpubReaderActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         try {
-            val uri = intent.data ?: error("No se recibió el archivo EPUB.")
+            val uri = intent.data ?: error("No EPUB file was provided.")
             archive = File(cacheDir, "book_${System.currentTimeMillis()}.epub").also { target ->
                 contentResolver.openInputStream(uri)?.use { input -> target.outputStream().use { output -> input.copyTo(output) } }
-                    ?: error("No se pudo leer el archivo EPUB.")
+                    ?: error("Could not read the EPUB file.")
             }
             zip = ZipFile(archive!!)
-            val container = zip!!.getInputStream(zip!!.getEntry("META-INF/container.xml") ?: error("EPUB no válido."))
+            val container = zip!!.getInputStream(zip!!.getEntry("META-INF/container.xml") ?: error("Invalid EPUB file."))
                 .bufferedReader().use { it.readText() }
             val opfPath = Regex("""full-path\s*=\s*["']([^"']+)["']""").find(container)?.groupValues?.get(1)
-                ?: error("No se encontró el paquete de lectura EPUB.")
-            val opf = zip!!.getInputStream(zip!!.getEntry(opfPath) ?: error("Falta el archivo OPF."))
+                ?: error("Could not find the EPUB package document.")
+            val opf = zip!!.getInputStream(zip!!.getEntry(opfPath) ?: error("The OPF file is missing."))
                 .bufferedReader().use { it.readText() }
             val base = opfPath.substringBeforeLast('/', "")
             val manifest = Regex("""<item\b([^>]+?)/?>""", RegexOption.IGNORE_CASE).findAll(opf).mapNotNull { match ->
@@ -58,11 +58,11 @@ class EpubReaderActivity : Activity() {
                     ?: path.substringAfterLast('/')
                 path to "$title\n\n" + htmlToText(html)
             }
-            check(chapters.isNotEmpty()) { "El EPUB no contiene capítulos compatibles." }
+            check(chapters.isNotEmpty()) { "This EPUB contains no supported chapters." }
             buildLayout()
             showChapter(0)
         } catch (error: Exception) {
-            Toast.makeText(this, error.message ?: "No se pudo abrir el EPUB.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, error.message ?: "Could not open the EPUB.", Toast.LENGTH_LONG).show()
             finish()
         }
     }
@@ -88,8 +88,8 @@ class EpubReaderActivity : Activity() {
         }
         scroll.addView(body)
         val controls = LinearLayout(this).apply { gravity = Gravity.CENTER }
-        controls.addView(Button(this).apply { text = "← Capítulo anterior"; setOnClickListener { showChapter(chapterIndex - 1) } })
-        controls.addView(Button(this).apply { text = "Siguiente →"; setOnClickListener { showChapter(chapterIndex + 1) } })
+        controls.addView(Button(this).apply { text = "← Previous chapter"; setOnClickListener { showChapter(chapterIndex - 1) } })
+        controls.addView(Button(this).apply { text = "Next →"; setOnClickListener { showChapter(chapterIndex + 1) } })
         root.addView(heading)
         root.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         root.addView(controls)
@@ -101,7 +101,7 @@ class EpubReaderActivity : Activity() {
         chapterIndex = index.coerceIn(0, chapters.lastIndex)
         val content = chapters[chapterIndex].second
         val split = content.indexOf("\n\n")
-        heading.text = "Capítulo ${chapterIndex + 1} de ${chapters.size}"
+        heading.text = "Chapter ${chapterIndex + 1} of ${chapters.size}"
         body.text = content.substring(0, split) + "\n\n" + content.substring(split + 2)
         scroll.scrollTo(0, 0)
     }
