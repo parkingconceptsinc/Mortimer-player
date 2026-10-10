@@ -23,21 +23,23 @@ class EpubReaderActivity : Activity() {
     private lateinit var heading: TextView
     private lateinit var body: TextView
     private lateinit var scroll: ScrollView
+    private lateinit var previousChapter: Button
+    private lateinit var nextChapter: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         try {
-            val uri = intent.data ?: error("No se recibió el archivo EPUB.")
+            val uri = intent.data ?: error("No EPUB file was provided.")
             archive = File(cacheDir, "book_${System.currentTimeMillis()}.epub").also { target ->
                 contentResolver.openInputStream(uri)?.use { input -> target.outputStream().use { output -> input.copyTo(output) } }
-                    ?: error("No se pudo leer el archivo EPUB.")
+                    ?: error("Could not read the EPUB file.")
             }
             zip = ZipFile(archive!!)
-            val container = zip!!.getInputStream(zip!!.getEntry("META-INF/container.xml") ?: error("EPUB no válido."))
+            val container = zip!!.getInputStream(zip!!.getEntry("META-INF/container.xml") ?: error("Invalid EPUB file."))
                 .bufferedReader().use { it.readText() }
             val opfPath = Regex("""full-path\s*=\s*["']([^"']+)["']""").find(container)?.groupValues?.get(1)
-                ?: error("No se encontró el paquete de lectura EPUB.")
-            val opf = zip!!.getInputStream(zip!!.getEntry(opfPath) ?: error("Falta el archivo OPF."))
+                ?: error("Could not find the EPUB package document.")
+            val opf = zip!!.getInputStream(zip!!.getEntry(opfPath) ?: error("The OPF file is missing."))
                 .bufferedReader().use { it.readText() }
             val base = opfPath.substringBeforeLast('/', "")
             val manifest = Regex("""<item\b([^>]+?)/?>""", RegexOption.IGNORE_CASE).findAll(opf).mapNotNull { match ->
@@ -50,19 +52,21 @@ class EpubReaderActivity : Activity() {
             }.toMap()
             val spine = Regex("""<itemref\b[^>]*\bidref\s*=\s*["']([^"']+)["'][^>]*/?>""", RegexOption.IGNORE_CASE)
                 .findAll(opf).mapNotNull { manifest[it.groupValues[1]] }.toList()
+            // Keep only chapter paths and lightweight labels in memory. Load chapter text on demand.
             chapters = spine.mapNotNull { path ->
-                val entry = zip!!.getEntry(path) ?: return@mapNotNull null
-                val html = zip!!.getInputStream(entry).bufferedReader().use { it.readText() }
-                val title = Regex("""<title[^>]*>(.*?)</title>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
-                    .find(html)?.groupValues?.get(1)?.replace(Regex("<[^>]+>"), "")?.trim()?.takeIf { it.isNotEmpty() }
-                    ?: path.substringAfterLast('/')
-                path to "$title\n\n" + htmlToText(html)
+                if (zip!!.getEntry(path) == null) return@mapNotNull null
+                val label = path.substringAfterLast('/').substringBeforeLast('.')
+                    .replace(Regex("[-_]"), " ").ifBlank { "Chapter" }
+                path to label
             }
-            check(chapters.isNotEmpty()) { "El EPUB no contiene capítulos compatibles." }
+            check(chapters.isNotEmpty()) { "This EPUB contains no supported chapters." }
             buildLayout()
-            showChapter(0)
+            val uriForProgress = intent.data ?: Uri.EMPTY
+            val savedChapter = getSharedPreferences("reading_progress", MODE_PRIVATE)
+                .getInt(readingProgressKey(uriForProgress), 0)
+            showChapter(savedChapter)
         } catch (error: Exception) {
-            Toast.makeText(this, error.message ?: "No se pudo abrir el EPUB.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, error.message ?: "Could not open the EPUB.", Toast.LENGTH_LONG).show()
             finish()
         }
     }
@@ -75,21 +79,35 @@ class EpubReaderActivity : Activity() {
     private fun buildLayout() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(18, 18, 18, 18)
+            setPadding(dp(16), dp(12), dp(16), dp(12))
             setBackgroundColor(Color.rgb(7, 7, 10))
         }
         heading = TextView(this).apply {
-            textSize = 18f; setTextColor(Color.rgb(255, 120, 73)); gravity = Gravity.CENTER
+            textSize = 18f; maxLines = 2; setTextColor(Color.rgb(255, 120, 73)); gravity = Gravity.CENTER
         }
         scroll = ScrollView(this)
         body = TextView(this).apply {
-            textSize = 18f; setTextColor(Color.rgb(240, 240, 244)); setLineSpacing(8f, 1f)
-            setPadding(0, 18, 0, 18)
+            textSize = 18f; setTextColor(Color.rgb(240, 240, 244)); setLineSpacing(dp(4).toFloat(), 1f)
+            setPadding(0, dp(18), 0, dp(18))
         }
         scroll.addView(body)
         val controls = LinearLayout(this).apply { gravity = Gravity.CENTER }
-        controls.addView(Button(this).apply { text = "← Capítulo anterior"; setOnClickListener { showChapter(chapterIndex - 1) } })
-        controls.addView(Button(this).apply { text = "Siguiente →"; setOnClickListener { showChapter(chapterIndex + 1) } })
+        previousChapter = Button(this).apply {
+            text = "← Previous"
+            textSize = 12f
+            minWidth = 0
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            setOnClickListener { showChapter(chapterIndex - 1) }
+        }
+        nextChapter = Button(this).apply {
+            text = "Next →"
+            textSize = 12f
+            minWidth = 0
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            setOnClickListener { showChapter(chapterIndex + 1) }
+        }
+        controls.addView(previousChapter, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        controls.addView(nextChapter, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         root.addView(heading)
         root.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         root.addView(controls)
@@ -98,13 +116,39 @@ class EpubReaderActivity : Activity() {
 
     private fun showChapter(index: Int) {
         if (chapters.isEmpty()) return
-        chapterIndex = index.coerceIn(0, chapters.lastIndex)
-        val content = chapters[chapterIndex].second
-        val split = content.indexOf("\n\n")
-        heading.text = "Capítulo ${chapterIndex + 1} de ${chapters.size}"
-        body.text = content.substring(0, split) + "\n\n" + content.substring(split + 2)
-        scroll.scrollTo(0, 0)
+        val targetIndex = index.coerceIn(0, chapters.lastIndex)
+        val (path, label) = chapters[targetIndex]
+        try {
+            val entry = zip?.getEntry(path) ?: error("Chapter file is missing.")
+            val html = zip!!.getInputStream(entry).bufferedReader().use { it.readText() }
+            val title = Regex("""<title[^>]*>(.*?)</title>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+                .find(html)?.groupValues?.get(1)?.replace(Regex("<[^>]+>"), "")?.trim()?.takeIf { it.isNotEmpty() }
+                ?: label
+            val renderedContent = htmlToText(html)
+
+            // Commit the new position only after the chapter has been read and rendered.
+            body.text = renderedContent
+            heading.text = "$title  ·  ${targetIndex + 1} of ${chapters.size}"
+            scroll.scrollTo(0, 0)
+            chapterIndex = targetIndex
+            previousChapter.isEnabled = chapterIndex > 0
+            nextChapter.isEnabled = chapterIndex < chapters.lastIndex
+            (intent.data ?: Uri.EMPTY).let { uri ->
+                getSharedPreferences("reading_progress", MODE_PRIVATE).edit()
+                    .putInt(readingProgressKey(uri), chapterIndex).apply()
+            }
+        } catch (error: Exception) {
+            // Keep the last successfully displayed chapter as the navigation/progress position.
+            heading.text = "Chapter ${targetIndex + 1} could not be loaded"
+            body.text = error.message ?: "The chapter could not be read."
+            previousChapter.isEnabled = chapterIndex > 0
+            nextChapter.isEnabled = chapterIndex < chapters.lastIndex
+        }
     }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private fun readingProgressKey(uri: Uri): String = "epub_${uri.toString().hashCode()}"
 
     override fun onDestroy() {
         zip?.close()

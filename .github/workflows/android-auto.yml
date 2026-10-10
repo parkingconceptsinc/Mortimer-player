@@ -12,6 +12,10 @@ on:
       - ".github/workflows/android-auto.yml"
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -24,9 +28,29 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
-      - name: Assemble Android Auto companion
+      - name: Test, lint, and assemble Android Auto companion
         working-directory: android
-        run: gradle assembleDebug
+        run: gradle testDebugUnitTest lintDebug assembleDebug
+      - name: Print Android lint findings
+        if: always()
+        shell: bash
+        run: |
+          report="android/app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt"
+          if [[ -f "$report" ]]; then
+            cat "$report"
+          else
+            echo "No Android lint text report was generated."
+          fi
+
+      - name: Upload Android lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mortimer-player-android-lint-report
+          path: android/app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Upload installable debug APK
         uses: actions/upload-artifact@v4
         with:
