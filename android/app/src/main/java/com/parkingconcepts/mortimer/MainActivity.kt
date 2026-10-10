@@ -276,9 +276,25 @@ private fun enrichMediaMetadata(context: Context, item: LocalMedia): LocalMedia 
             val art = retriever.embeddedPicture?.takeIf { it.isNotEmpty() && it.size <= MAX_EMBEDDED_ART_BYTES }
             if (art == null) item.coverPath else {
                 val dir = File(context.filesDir, "album-art")
-                if (!dir.exists()) dir.mkdirs()
-                val destination = File(dir, "${item.uri.toString().hashCode().toUInt().toString(16)}.jpg")
-                destination.writeBytes(art)
+                if (!dir.exists() && !dir.mkdirs()) {
+                    throw java.io.IOException("Could not create album-art directory.")
+                }
+                // URI hashes based on String.hashCode can collide. A SHA-256 key gives
+                // each source URI a stable, practically collision-resistant artwork path.
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(item.uri.toString().toByteArray(Charsets.UTF_8))
+                    .joinToString("") { byte -> "%02x".format(byte) }
+                val destination = File(dir, "$digest.img")
+                val atomic = android.util.AtomicFile(destination)
+                var output: java.io.FileOutputStream? = null
+                try {
+                    output = atomic.startWrite()
+                    output.write(art)
+                    atomic.finishWrite(output)
+                } catch (error: Exception) {
+                    output?.let { atomic.failWrite(it) }
+                    throw error
+                }
                 destination.absolutePath
             }
         }.getOrDefault(item.coverPath)
