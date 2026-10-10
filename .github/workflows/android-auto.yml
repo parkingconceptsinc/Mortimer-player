@@ -27,6 +27,15 @@ jobs:
       - name: Test, lint, and assemble Android Auto companion
         working-directory: android
         run: gradle testDebugUnitTest lintDebug assembleDebug
+      - name: Upload Android lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mortimer-player-android-lint-report
+          path: android/app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Upload installable debug APK
         uses: actions/upload-artifact@v4
         with:
