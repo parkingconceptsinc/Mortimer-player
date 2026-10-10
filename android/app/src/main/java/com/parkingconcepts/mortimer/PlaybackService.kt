@@ -147,10 +147,7 @@ class PlaybackService : MediaLibraryService() {
         ): ListenableFuture<MediaItemsWithStartPosition> {
             // When Android Auto requests one song, expand it into the audio library
             // and preserve the selected song as the queue's starting position.
-            if (mediaItems.size == 1 &&
-                (mediaSession.isAutomotiveController(controller) ||
-                    mediaSession.isAutoCompanionController(controller))
-            ) {
+            if (mediaItems.size == 1) {
                 val selectedUri = resolveUri(mediaItems.first())
                 val queueUris = allAudioUris()
                 val selectedIndex = queueUris.indexOf(selectedUri)
