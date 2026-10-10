@@ -35,10 +35,10 @@ class PdfReaderActivity : Activity() {
         }
         try {
             descriptor = contentResolver.openFileDescriptor(uri, "r")
-            val fd = descriptor ?: throw IllegalStateException("No se pudo abrir el PDF")
+            val fd = descriptor ?: throw IllegalStateException("Could not open the PDF")
             renderer = PdfRenderer(fd)
         } catch (error: Exception) {
-            showError(error.message ?: "No se pudo abrir este PDF")
+            showError(error.message ?: "Could not open this PDF")
             return
         }
 
@@ -48,7 +48,7 @@ class PdfReaderActivity : Activity() {
             setPadding(12, 8, 12, 8)
         }
         val header = TextView(this).apply {
-            text = intent.getStringExtra(EXTRA_TITLE) ?: "Lector PDF"
+            text = intent.getStringExtra(EXTRA_TITLE) ?: "PDF Reader"
             setTextColor(Color.WHITE)
             textSize = 18f
             gravity = Gravity.CENTER_VERTICAL
@@ -68,7 +68,7 @@ class PdfReaderActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
         }
         previous = Button(this).apply {
-            text = "Anterior"
+            text = "Previous"
             setOnClickListener { showPage(pageIndex - 1) }
         }
         pageLabel = TextView(this).apply {
@@ -77,7 +77,7 @@ class PdfReaderActivity : Activity() {
             gravity = Gravity.CENTER
         }
         next = Button(this).apply {
-            text = "Siguiente"
+            text = "Next"
             setOnClickListener { showPage(pageIndex + 1) }
         }
         controls.addView(previous)
@@ -110,13 +110,13 @@ class PdfReaderActivity : Activity() {
             previous.isEnabled = index > 0
             next.isEnabled = index < pdf.pageCount - 1
         } catch (error: Exception) {
-            showError(error.message ?: "No se pudo renderizar la página")
+            showError(error.message ?: "Could not render the page")
         }
     }
 
     private fun showError(message: String) {
         setContentView(TextView(this).apply {
-            text = "No se pudo abrir el PDF.\n$message"
+            text = "Could not open the PDF.\n$message"
             textSize = 18f
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.rgb(7, 7, 10))
