@@ -205,9 +205,13 @@ private fun loadMedia(context: Context, category: String, mime: String): List<Lo
                     )
                 }.getOrNull()
             }.sortedBy { it.title.lowercase() }
-        }.getOrElse {
-            // Fall back to the previous store if the new file is damaged.
-            loadLegacyMedia(context, category, mime)
+        }.getOrElse { error ->
+            // If the JSON file is damaged, restore it from the legacy store when possible.
+            // Keep the fallback data usable even if the repair write itself fails.
+            android.util.Log.e("MortimerLibrary", "Could not read $category library JSON; trying legacy backup", error)
+            val legacy = loadLegacyMedia(context, category, mime)
+            if (legacy.isNotEmpty()) saveMedia(context, category, legacy)
+            legacy
         }
     }
 
