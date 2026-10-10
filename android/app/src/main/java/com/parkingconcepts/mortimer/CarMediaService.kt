@@ -89,7 +89,13 @@ class CarMediaService : MediaBrowserServiceCompat() {
                     val uri = Uri.parse(mediaId)
                     val metadata = metadataFor(uri) ?: return
                     session.setMetadata(metadata)
-                    player.setMediaItem(MediaItem.fromUri(uri))
+                    val queue = allAudioUris()
+                    val selectedIndex = queue.indexOf(uri)
+                    if (selectedIndex >= 0) {
+                        player.setMediaItems(queue.map { MediaItem.fromUri(it) }, selectedIndex, 0L)
+                    } else {
+                        player.setMediaItem(MediaItem.fromUri(uri))
+                    }
                     player.prepare()
                     player.play()
                     updatePlaybackState()
@@ -205,6 +211,40 @@ class CarMediaService : MediaBrowserServiceCompat() {
             }
         }
         result.sendResult(items)
+    }
+
+    private fun allAudioUris(): List<Uri> {
+        val ordered = linkedSetOf<Uri>()
+        if (hasAudioPermission()) {
+            val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            runCatching {
+                contentResolver.query(
+                    collection,
+                    arrayOf(MediaStore.Audio.Media._ID),
+                    "${MediaStore.Audio.Media.IS_MUSIC} != 0",
+                    null,
+                    "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
+                )?.use { cursor ->
+                    val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                    while (cursor.moveToNext()) {
+                        ordered.add(ContentUris.withAppendedId(collection, cursor.getLong(idColumn)))
+                    }
+                }
+            }
+        }
+        val imported = getSharedPreferences("mortimer_library", MODE_PRIVATE)
+            .getStringSet("audio", emptySet()).orEmpty()
+            .mapNotNull { row ->
+                val parts = row.split('\t', limit = 2)
+                if (parts.size == 2 && parts[0].isNotBlank()) {
+                    parts[0] to parts[1]
+                } else null
+            }
+            .sortedBy { it.second.lowercase() }
+        imported.forEach { (rawUri, _) ->
+            runCatching { Uri.parse(rawUri) }.getOrNull()?.let(ordered::add)
+        }
+        return ordered.toList()
     }
 
     private fun metadataFor(uri: Uri): MediaMetadataCompat? {
