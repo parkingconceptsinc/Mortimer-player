@@ -978,7 +978,7 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
             Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                 Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("NOW PLAYING", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                        Text("NOW PLAYING", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, modifier = Modifier.clickable { section = "Now Playing" })
                         Spacer(Modifier.weight(1f))
                         Text(if (sleepEndOfTrack) "Sleep: end of track" else if (sleepDeadline > System.currentTimeMillis()) "Sleep: ${sleepMinutesRemaining}m" else "Sleep off", color = Muted, fontSize = 10.sp)
                     }
