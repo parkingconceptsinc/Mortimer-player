@@ -59,7 +59,7 @@ class MainActivity : ComponentActivity() {
             )) {
                 Surface(Modifier.fillMaxSize(), color = Bg) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Iniciando Mortimer Player…", color = MainText)
+                        Text("Starting Mortimer Player…", color = MainText)
                     }
                 }
             }
@@ -82,7 +82,7 @@ class MainActivity : ComponentActivity() {
                     if (!isFinishing && !isDestroyed) {
                         setContent {
                             Surface(Modifier.fillMaxSize(), color = Bg) {
-                                Text("No se pudo iniciar el reproductor. Cierra y vuelve a abrir Mortimer Player.", color = MainText, modifier = Modifier.padding(24.dp))
+                                Text("Could not start the player. Close and reopen Mortimer Player.", color = MainText, modifier = Modifier.padding(24.dp))
                             }
                         }
                     }
@@ -165,7 +165,7 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
     val books = remember { mutableStateListOf<LocalMedia>().apply { addAll(loadMedia(context, "books", "*/*")) } }
     val comics = remember { mutableStateListOf<LocalMedia>().apply { addAll(loadMedia(context, "comics", "*/*")) } }
     var section by remember { mutableStateOf("Inicio") }
-    var currentTitle by remember { mutableStateOf(player.currentMediaItem?.mediaMetadata?.title?.toString() ?: "Nada se está reproduciendo") }
+    var currentTitle by remember { mutableStateOf(player.currentMediaItem?.mediaMetadata?.title?.toString() ?: "Nothing is playing") }
     var currentVideoUri by remember { mutableStateOf<Uri?>(null) }
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
     var playbackError by remember { mutableStateOf<String?>(null) }
@@ -173,21 +173,21 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         uris.forEach { uri ->
             rememberPermission(context, uri)
-            addMediaIfMissing(audio, LocalMedia(uri, displayName(context, uri, "Archivo de audio"), "audio/*"))
+            addMediaIfMissing(audio, LocalMedia(uri, displayName(context, uri, "Audio file"), "audio/*"))
         }
         saveMedia(context, "audio", audio)
     }
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         uris.forEach { uri ->
             rememberPermission(context, uri)
-            addMediaIfMissing(videos, LocalMedia(uri, displayName(context, uri, "Vídeo"), "video/*"))
+            addMediaIfMissing(videos, LocalMedia(uri, displayName(context, uri, "Video"), "video/*"))
         }
         saveMedia(context, "videos", videos)
     }
     val bookPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         uris.forEach { uri ->
             rememberPermission(context, uri)
-            addMediaIfMissing(books, LocalMedia(uri, displayName(context, uri, "Libro"), "*/*"))
+            addMediaIfMissing(books, LocalMedia(uri, displayName(context, uri, "Book"), "*/*"))
         }
         saveMedia(context, "books", books)
     }
@@ -206,11 +206,11 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                 playbackError = when (error.errorCode) {
                     PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
                     PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES ->
-                        "Formato o códec no compatible con este dispositivo."
+                        "This device does not support this format or codec."
                     PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
                     PlaybackException.ERROR_CODE_IO_NO_PERMISSION ->
-                        "No se puede acceder al archivo. Vuelve a importarlo."
-                    else -> "No se pudo reproducir este archivo. Código: " + error.errorCodeName
+                        "Can't access this file. Please import it again."
+                    else -> "Could not play this file. Error: " + error.errorCodeName
                 }
             }
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -218,7 +218,7 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                 val uri = mediaItem?.localConfiguration?.uri
                 currentTitle = audio.firstOrNull { it.uri == uri }?.title
                     ?: mediaItem?.mediaMetadata?.title?.toString()
-                    ?: "Nada se está reproduciendo"
+                    ?: "Nothing is playing"
             }
         }
         player.addListener(listener)
@@ -231,30 +231,30 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
             Text("MORTIMER PLAYER", color = Accent, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
             Spacer(Modifier.height(6.dp))
             Text(section, color = MainText, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold)
-            Text("Tu biblioteca multimedia", color = Muted, fontSize = 14.sp)
+            Text("Your media library", color = Muted, fontSize = 14.sp)
             Spacer(Modifier.height(18.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 NavChip("Inicio", section == "Inicio") { section = "Inicio" }
-                NavChip("Mi música", section == "Mi música") { section = "Mi música" }
+                NavChip("Music", section == "Music") { section = "Music" }
                 NavChip("Servicios", section == "Servicios") { section = "Servicios" }
             }
             Spacer(Modifier.height(14.dp))
             when (section) {
                 "Inicio" -> {
-                    Text("TU CONTENIDO", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                    Text("YOUR LIBRARY", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
                     Spacer(Modifier.height(8.dp))
-                    HomeCard("♫", "Mi música", "Archivos del teléfono, SD o USB", audio.size.toString() + " archivos") { section = "Mi música" }
-                    HomeCard("▣", "Vídeos", "Tus vídeos locales", videos.size.toString() + " archivos") { section = "Vídeos" }
-                    HomeCard("▤", "Libros", "EPUB, PDF y otros documentos", books.size.toString() + " archivos") { section = "Libros" }
-                    HomeCard("▧", "Cómics", "Selecciona tus archivos de cómic", comics.size.toString() + " archivos") { section = "Cómics" }
-                    HomeCard("♫", "Servicios de música", "Spotify y servicios compatibles", "Conectar") { section = "Servicios" }
+                    HomeCard("♫", "Music", "Files from your phone, SD card, or USB drive", audio.size.toString() + " files") { section = "Music" }
+                    HomeCard("▣", "Videos", "Your local videos", videos.size.toString() + " files") { section = "Videos" }
+                    HomeCard("▤", "Books", "EPUB, PDF, and other documents", books.size.toString() + " files") { section = "Books" }
+                    HomeCard("▧", "Comics", "Selecciona tus files de cómic", comics.size.toString() + " files") { section = "Comics" }
+                    HomeCard("♫", "Music services", "Spotify y servicios compatibles", "Connect") { section = "Servicios" }
                 }
-                "Mi música" -> {
-                    Button(onClick = { audioPicker.launch(arrayOf("audio/*")) }, colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF111114))) { Text("＋ Añadir música") }
-                    if (audio.isEmpty()) EmptyMessage("Elige archivos de audio del teléfono, una tarjeta SD o una memoria USB.")
+                "Music" -> {
+                    Button(onClick = { audioPicker.launch(arrayOf("audio/*")) }, colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF111114))) { Text("＋ Add music") }
+                    if (audio.isEmpty()) EmptyMessage("Elige files de audio del teléfono, una tarjeta SD o una memoria USB.")
                     LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         items(audio) { item ->
-                            MediaRow(item.title, "Audio local") {
+                            MediaRow(item.title, "Local audio") {
                                 currentTitle = item.title
                                 currentVideoUri = null
                                 val selectedIndex = audio.indexOf(item).coerceAtLeast(0)
@@ -266,15 +266,15 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                     }
                 }
                 "Servicios" -> {
-                    HomeCard("♫", "Spotify", "Abrir la aplicación oficial de Spotify", "Abrir") { openSpotify() }
-                    Text("Spotify se reproduce en su aplicación oficial. Mortimer Player utiliza su reproductor nativo para los archivos locales.", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 12.dp))
+                    HomeCard("♫", "Spotify", "Open the official Spotify app", "Open") { openSpotify() }
+                    Text("Spotify se reproduce en su aplicación oficial. Mortimer Player utiliza su reproductor nativo para los files locales.", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 12.dp))
                 }
-                "Vídeos" -> {
-                    Button(onClick = { videoPicker.launch(arrayOf("video/*")) }) { Text("＋ Añadir vídeos") }
-                    if (videos.isEmpty()) EmptyMessage("Selecciona vídeos del dispositivo, SD o USB.")
+                "Videos" -> {
+                    Button(onClick = { videoPicker.launch(arrayOf("video/*")) }) { Text("＋ Add videos") }
+                    if (videos.isEmpty()) EmptyMessage("Select videos from your device, SD card, or USB drive.")
                     LazyColumn(modifier = Modifier.weight(1f)) {
                         items(videos) { item ->
-                            MediaRow(item.title, "Vídeo local") {
+                            MediaRow(item.title, "Video local") {
                                 currentTitle = item.title
                                 currentVideoUri = item.uri
                                 player.setMediaItem(MediaItem.fromUri(item.uri))
@@ -291,10 +291,10 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                         )
                     }
                 }
-                "Libros" -> {
-                    Button(onClick = { bookPicker.launch(arrayOf("application/epub+zip", "application/pdf", "text/plain", "*/*")) }) { Text("＋ Importar libros") }
-                    if (books.isEmpty()) EmptyMessage("Importa EPUB, PDF u otros documentos. Elige un PDF o EPUB para leerlo dentro de Mortimer Player.")
-                    LazyColumn(modifier = Modifier.weight(1f)) { items(books) { item -> MediaRow(item.title, "Documento seleccionado") {
+                "Books" -> {
+                    Button(onClick = { bookPicker.launch(arrayOf("application/epub+zip", "application/pdf", "text/plain", "*/*")) }) { Text("＋ Import books") }
+                    if (books.isEmpty()) EmptyMessage("Import EPUB, PDF, or other documents. Select a PDF or EPUB to read it in Mortimer Player.")
+                    LazyColumn(modifier = Modifier.weight(1f)) { items(books) { item -> MediaRow(item.title, "Selected document") {
                             val lowerTitle = item.title.substringBefore("?").lowercase()
                             when {
                                 lowerTitle.endsWith(".pdf") -> runCatching {
@@ -314,11 +314,11 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                             }
                         } } }
                 }
-                "Cómics" -> {
-                    Button(onClick = { comicPicker.launch(arrayOf("application/zip", "application/x-cbz", "application/pdf", "*/*")) }) { Text("＋ Importar cómics") }
-                    if (comics.isEmpty()) EmptyMessage("Importa archivos CBZ para leerlos aquí. CBR requiere una aplicación compatible.")
+                "Comics" -> {
+                    Button(onClick = { comicPicker.launch(arrayOf("application/zip", "application/x-cbz", "application/pdf", "*/*")) }) { Text("＋ Import comics") }
+                    if (comics.isEmpty()) EmptyMessage("Importa files CBZ para leerlos aquí. CBR requiere una aplicación compatible.")
                     LazyColumn(modifier = Modifier.weight(1f)) { items(comics) { item ->
-                        MediaRow(item.title, "Archivo de cómic") {
+                        MediaRow(item.title, "Comic file") {
                             if (item.title.substringBefore("?").lowercase().endsWith(".cbz")) {
                                 runCatching {
                                     context.startActivity(Intent(context, ComicReaderActivity::class.java).apply {
@@ -335,15 +335,15 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
             Spacer(Modifier.weight(1f))
             Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                 Column(Modifier.padding(14.dp)) {
-                    Text("REPRODUCIENDO", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                    Text("NOW PLAYING", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
                     Text(currentTitle, color = MainText, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
                     playbackError?.let { message ->
                         Text(message, color = Color(0xFFFF9A86), fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp))
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
-                        Button(onClick = { if (player.hasPreviousMediaItem()) player.seekToPreviousMediaItem() }, enabled = player.hasPreviousMediaItem(), colors = ButtonDefaults.buttonColors(containerColor = Panel2)) { Text("Anterior") }
-                        Button(onClick = { if (player.isPlaying) player.pause() else player.play() }, enabled = player.currentMediaItem != null, colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF111114))) { Text(if (isPlaying) "Ⅱ Pausar" else "▶ Reproducir") }
-                        Button(onClick = { if (player.hasNextMediaItem()) player.seekToNextMediaItem() }, enabled = player.hasNextMediaItem(), colors = ButtonDefaults.buttonColors(containerColor = Panel2)) { Text("Siguiente") }
+                        Button(onClick = { if (player.hasPreviousMediaItem()) player.seekToPreviousMediaItem() }, enabled = player.hasPreviousMediaItem(), colors = ButtonDefaults.buttonColors(containerColor = Panel2)) { Text("Previous") }
+                        Button(onClick = { if (player.isPlaying) player.pause() else player.play() }, enabled = player.currentMediaItem != null, colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF111114))) { Text(if (isPlaying) "Ⅱ Pause" else "▶ Play") }
+                        Button(onClick = { if (player.hasNextMediaItem()) player.seekToNextMediaItem() }, enabled = player.hasNextMediaItem(), colors = ButtonDefaults.buttonColors(containerColor = Panel2)) { Text("Next") }
                     }
                 }
             }
@@ -383,7 +383,7 @@ private fun MediaRow(title: String, subtitle: String, onClick: () -> Unit) {
                 Text(title, color = MainText, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(subtitle, color = Muted, fontSize = 12.sp)
             }
-            Text("Abrir", color = Accent, fontSize = 12.sp)
+            Text("Open", color = Accent, fontSize = 12.sp)
         }
     }
 }
