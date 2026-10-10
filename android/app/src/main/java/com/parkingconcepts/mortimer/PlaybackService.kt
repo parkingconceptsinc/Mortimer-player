@@ -125,6 +125,7 @@ class PlaybackService : MediaLibraryService() {
             )
         }
 
+        @UnstableApi
         override fun onGetItem(
             session: MediaLibrarySession,
             browser: MediaSession.ControllerInfo,
