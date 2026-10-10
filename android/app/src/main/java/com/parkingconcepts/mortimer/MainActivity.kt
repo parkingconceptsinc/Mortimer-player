@@ -1000,37 +1000,51 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                     Text("Spotify plays in its official app. Mortimer Player uses its built-in player for local files.", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 12.dp))
                 }
                 "Videos" -> {
-                    Button(onClick = { videoPicker.launch(arrayOf("video/*")) }, modifier = Modifier.fillMaxWidth()) { Text("＋ Add videos") }
-                    if (videos.isEmpty()) EmptyMessage("Select videos from your device, SD card, or USB drive.")
-                    LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(videos) { item ->
-                            MediaRow(item.title, "Local video") {
-                                currentTitle = item.title
-                                currentVideoUri = item.uri
-                                player.setMediaItem(
-                                    MediaItem.Builder()
-                                        .setMediaId(item.uri.toString())
-                                        .setUri(item.uri)
-                                        .setMediaMetadata(
-                                            MediaMetadata.Builder()
-                                                .setTitle(item.title)
-                                                .setIsBrowsable(false)
-                                                .setIsPlayable(true)
+                    // Size the video surface against the actual space available on the device.
+                    // Keep it above the weighted list so it cannot push the player outside the screen.
+                    BoxWithConstraints(Modifier.fillMaxSize()) {
+                        val videoPlayerHeight = (maxHeight * 0.38f).coerceIn(120.dp, 220.dp)
+                        Column(Modifier.fillMaxSize()) {
+                            Button(onClick = { videoPicker.launch(arrayOf("video/*")) }, modifier = Modifier.fillMaxWidth()) {
+                                Text("＋ Add videos", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            if (currentVideoUri != null) {
+                                AndroidView(
+                                    factory = { viewContext -> PlayerView(viewContext).apply { this.player = player; useController = true } },
+                                    update = { it.player = player },
+                                    modifier = Modifier.fillMaxWidth().height(videoPlayerHeight)
+                                )
+                            }
+                            if (videos.isEmpty()) {
+                                EmptyMessage("Select videos from your device, SD card, or USB drive.")
+                            }
+                            LazyColumn(
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                items(videos, key = { it.uri.toString() }) { item ->
+                                    MediaRow(item.title, "Local video") {
+                                        currentTitle = item.title
+                                        currentVideoUri = item.uri
+                                        player.setMediaItem(
+                                            MediaItem.Builder()
+                                                .setMediaId(item.uri.toString())
+                                                .setUri(item.uri)
+                                                .setMediaMetadata(
+                                                    MediaMetadata.Builder()
+                                                        .setTitle(item.title)
+                                                        .setIsBrowsable(false)
+                                                        .setIsPlayable(true)
+                                                        .build()
+                                                )
                                                 .build()
                                         )
-                                        .build()
-                                )
-                                player.prepare()
-                                player.play()
+                                        player.prepare()
+                                        player.play()
+                                    }
+                                }
                             }
                         }
-                    }
-                    if (currentVideoUri != null) {
-                        AndroidView(
-                            factory = { viewContext -> PlayerView(viewContext).apply { this.player = player; useController = true } },
-                            update = { it.player = player },
-                            modifier = Modifier.fillMaxWidth().height(220.dp)
-                        )
                     }
                 }
                 "Books" -> {
@@ -1159,19 +1173,19 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                             enabled = player.hasPreviousMediaItem(), modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(containerColor = Panel2),
                             contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)) {
-                            Text("Previous", fontSize = 11.sp, maxLines = 1)
+                            Text("Previous", fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         Button(onClick = { if (isPlaying) player.pause() else player.play() },
                             enabled = player.currentMediaItem != null, modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF111114)),
                             contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)) {
-                            Text(if (isPlaying) "Ⅱ Pause" else "▶ Play", fontSize = 11.sp, maxLines = 1)
+                            Text(if (isPlaying) "Ⅱ Pause" else "▶ Play", fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         Button(onClick = { if (player.hasNextMediaItem()) player.seekToNextMediaItem() },
                             enabled = player.hasNextMediaItem(), modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(containerColor = Panel2),
                             contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)) {
-                            Text("Next", fontSize = 11.sp, maxLines = 1)
+                            Text("Next", fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                     if (section == "Now Playing") {
