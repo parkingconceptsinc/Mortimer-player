@@ -851,16 +851,140 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
             }
             if (section == "Home" || section == "Services") Spacer(Modifier.weight(1f))
             Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-                Column(Modifier.padding(14.dp)) {
-                    Text("NOW PLAYING", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("NOW PLAYING", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                        Spacer(Modifier.weight(1f))
+                        Text(if (sleepEndOfTrack) "Sleep: end of track" else if (sleepDeadline > System.currentTimeMillis()) "Sleep: ${sleepMinutesRemaining}m" else "Sleep off", color = Muted, fontSize = 10.sp)
+                    }
                     Text(currentTitle, color = MainText, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
                     playbackError?.let { message ->
                         Text(message, color = Color(0xFFFF9A86), fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp))
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
-                        Button(onClick = { if (player.hasPreviousMediaItem()) player.seekToPreviousMediaItem() }, enabled = player.hasPreviousMediaItem(), colors = ButtonDefaults.buttonColors(containerColor = Panel2)) { Text("Previous") }
-                        Button(onClick = { if (player.isPlaying) player.pause() else player.play() }, enabled = player.currentMediaItem != null, colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF111114))) { Text(if (isPlaying) "Ⅱ Pause" else "▶ Play") }
-                        Button(onClick = { if (player.hasNextMediaItem()) player.seekToNextMediaItem() }, enabled = player.hasNextMediaItem(), colors = ButtonDefaults.buttonColors(containerColor = Panel2)) { Text("Next") }
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                        Text(formatMediaDuration(currentPositionMs), color = Muted, fontSize = 10.sp)
+                        Slider(
+                            value = if (seeking) seekDraft else if (durationMs > 0L) (currentPositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f,
+                            onValueChange = {
+                                seeking = true
+                                seekDraft = it
+                            },
+                            onValueChangeFinished = {
+                                if (durationMs > 0L) player.seekTo((durationMs * seekDraft).toLong().coerceIn(0L, durationMs))
+                                currentPositionMs = (durationMs * seekDraft).toLong().coerceAtLeast(0L)
+                                seeking = false
+                            },
+                            enabled = durationMs > 0L,
+                            modifier = Modifier.weight(1f).height(30.dp)
+                        )
+                        Text(formatMediaDuration(durationMs), color = Muted, fontSize = 10.sp)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                        Button(onClick = { if (player.hasPreviousMediaItem()) player.seekToPreviousMediaItem() }, enabled = player.hasPreviousMediaItem(), colors = ButtonDefaults.buttonColors(containerColor = Panel2), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp)) { Text("Previous", fontSize = 11.sp) }
+                        Button(onClick = { if (player.isPlaying) player.pause() else player.play() }, enabled = player.currentMediaItem != null, colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF111114)), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 5.dp)) { Text(if (isPlaying) "Ⅱ Pause" else "▶ Play", fontSize = 11.sp) }
+                        Button(onClick = { if (player.hasNextMediaItem()) player.seekToNextMediaItem() }, enabled = player.hasNextMediaItem(), colors = ButtonDefaults.buttonColors(containerColor = Panel2), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp)) { Text("Next", fontSize = 11.sp) }
+                        Spacer(Modifier.weight(1f))
+                        Text(if (shuffleEnabled) "Shuffle on" else "Shuffle", color = if (shuffleEnabled) Accent else Muted, fontSize = 11.sp,
+                            modifier = Modifier.clickable {
+                                shuffleEnabled = !shuffleEnabled
+                                player.shuffleModeEnabled = shuffleEnabled
+                                preferences.edit().putBoolean("shuffle_enabled", shuffleEnabled).apply()
+                            }.padding(5.dp))
+                        Text(when (repeatMode) { Player.REPEAT_MODE_ONE -> "Repeat 1"; Player.REPEAT_MODE_ALL -> "Repeat all"; else -> "Repeat off" },
+                            color = if (repeatMode == Player.REPEAT_MODE_OFF) Muted else Accent, fontSize = 11.sp,
+                            modifier = Modifier.clickable {
+                                repeatMode = when (repeatMode) {
+                                    Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                                    Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                                    else -> Player.REPEAT_MODE_OFF
+                                }
+                                player.repeatMode = repeatMode
+                                preferences.edit().putInt("repeat_mode", repeatMode).apply()
+                            }.padding(5.dp))
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Volume", color = Muted, fontSize = 11.sp, modifier = Modifier.width(48.dp))
+                        Slider(
+                            value = deviceVolume.coerceIn(0f, 1f),
+                            onValueChange = { value ->
+                                val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+                                val streamVolume = (value * maxVolume).toInt().coerceIn(0, maxVolume)
+                                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, streamVolume, 0)
+                                deviceVolume = streamVolume.toFloat() / maxVolume
+                                if (streamVolume > 0) savedVolume = streamVolume
+                            },
+                            modifier = Modifier.weight(1f).height(28.dp)
+                        )
+                        Text("${(deviceVolume * 100).toInt()}%", color = MainText, fontSize = 10.sp)
+                        Text(if (deviceVolume == 0f) "Unmute" else "Mute", color = Accent, fontSize = 10.sp,
+                            modifier = Modifier.clickable {
+                                val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+                                if (audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) == 0) {
+                                    val restore = savedVolume.coerceIn(1, maxVolume)
+                                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, restore, 0)
+                                    deviceVolume = restore.toFloat() / maxVolume
+                                } else {
+                                    savedVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+                                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
+                                    deviceVolume = 0f
+                                }
+                            }.padding(4.dp))
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Speed", color = Muted, fontSize = 11.sp, modifier = Modifier.width(48.dp))
+                        Slider(
+                            value = speed.coerceIn(0.5f, 3f),
+                            onValueChange = { value ->
+                                speed = value
+                                player.setPlaybackParameters(PlaybackParameters(value))
+                                preferences.edit().putFloat("playback_speed", value).apply()
+                            },
+                            valueRange = 0.5f..3f,
+                            modifier = Modifier.weight(1f).height(28.dp)
+                        )
+                        Text(String.format(java.util.Locale.US, "%.2fx", speed), color = MainText, fontSize = 10.sp)
+                        Text("Sleep", color = Accent, fontSize = 11.sp,
+                            modifier = Modifier.clickable {
+                                val deadline = when {
+                                    sleepEndOfTrack -> {
+                                        sleepEndOfTrack = false
+                                        0L
+                                    }
+                                    sleepDeadline > System.currentTimeMillis() -> 0L
+                                    else -> System.currentTimeMillis() + 30L * 60L * 1000L
+                                }
+                                sleepDeadline = deadline
+                                preferences.edit().putLong("sleep_deadline", deadline).putBoolean("sleep_end_of_track", sleepEndOfTrack).apply()
+                                if (deadline == 0L && !sleepEndOfTrack) libraryScanStatus = "Sleep timer cleared."
+                            }.padding(4.dp))
+                    }
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                        items(listOf("Off", "15 min", "30 min", "60 min", "End of track")) { option ->
+                            NavChip(option, when (option) {
+                                "Off" -> sleepDeadline == 0L && !sleepEndOfTrack
+                                "End of track" -> sleepEndOfTrack
+                                else -> sleepDeadline > System.currentTimeMillis() &&
+                                    sleepMinutesRemaining == option.substringBefore(' ').toLongOrNull()
+                            }) {
+                                when (option) {
+                                    "Off" -> {
+                                        sleepDeadline = 0L
+                                        sleepEndOfTrack = false
+                                    }
+                                    "End of track" -> {
+                                        sleepDeadline = 0L
+                                        sleepEndOfTrack = true
+                                    }
+                                    else -> {
+                                        val mins = option.substringBefore(' ').toLongOrNull() ?: 30L
+                                        sleepDeadline = System.currentTimeMillis() + mins * 60L * 1000L
+                                        sleepEndOfTrack = false
+                                    }
+                                }
+                                preferences.edit().putLong("sleep_deadline", sleepDeadline)
+                                    .putBoolean("sleep_end_of_track", sleepEndOfTrack).apply()
+                            }
+                        }
                     }
                 }
             }
