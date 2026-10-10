@@ -74,7 +74,9 @@ class ComicReaderActivity : Activity() {
             root.addView(image)
             root.addView(controls)
             setContentView(root)
-            showPage(0)
+            val savedPage = getSharedPreferences("reading_progress", MODE_PRIVATE)
+                .getInt(readingProgressKey(uri), 0)
+            showPage(savedPage)
         } catch (error: Exception) {
             Toast.makeText(this, error.message ?: "Could not open the comic.", Toast.LENGTH_LONG).show()
             finish()
@@ -84,6 +86,10 @@ class ComicReaderActivity : Activity() {
     private fun showPage(index: Int) {
         if (pages.isEmpty()) return
         pageIndex = index.coerceIn(0, pages.lastIndex)
+        (intent.data ?: Uri.EMPTY).let { uri ->
+            getSharedPreferences("reading_progress", MODE_PRIVATE).edit()
+                .putInt(readingProgressKey(uri), pageIndex).apply()
+        }
         val entry = zip?.getEntry(pages[pageIndex]) ?: return
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         zip!!.getInputStream(entry).use { BitmapFactory.decodeStream(it, null, bounds) }
@@ -106,6 +112,8 @@ class ComicReaderActivity : Activity() {
         archive?.delete()
         super.onDestroy()
     }
+
+    private fun readingProgressKey(uri: Uri): String = "comic_${uri.toString().hashCode()}"
 
     private fun naturalSortKey(path: String): String =
         Regex("""\d+""").replace(path.lowercase()) { match -> match.value.padStart(12, '0') }
