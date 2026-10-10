@@ -149,10 +149,13 @@ class PlaybackService : MediaLibraryService() {
             // and preserve the selected song as the queue's starting position.
             if (mediaItems.size == 1) {
                 val selectedUri = resolveUri(mediaItems.first())
-                val queueUris = allAudioUris()
-                val selectedIndex = queueUris.indexOf(selectedUri)
-                if (selectedUri != null && selectedIndex >= 0) {
-                    val queue = queueUris.map { uri ->
+                // Avoid rescanning the entire audio library when the app selects a
+                // single video or another non-audio item.
+                if (selectedUri != null && isKnownAudioUri(selectedUri)) {
+                    val queueUris = allAudioUris()
+                    val selectedIndex = queueUris.indexOf(selectedUri)
+                    if (selectedIndex >= 0) {
+                        val queue = queueUris.map { uri ->
                         MediaItem.Builder()
                             .setMediaId(uri.toString())
                             .setUri(uri)
@@ -166,9 +169,10 @@ class PlaybackService : MediaLibraryService() {
                             )
                             .build()
                     }
-                    return Futures.immediateFuture(
-                        MediaItemsWithStartPosition(queue, selectedIndex, startPositionMs)
-                    )
+                        return Futures.immediateFuture(
+                            MediaItemsWithStartPosition(queue, selectedIndex, startPositionMs)
+                        )
+                    }
                 }
             }
 
@@ -201,6 +205,16 @@ class PlaybackService : MediaLibraryService() {
             if (!rawId.startsWith("content://") && !rawId.startsWith("file://")) return null
             return runCatching { Uri.parse(rawId) }.getOrNull()
         }
+    }
+
+    private fun isKnownAudioUri(uri: Uri): Boolean {
+        val rawUri = uri.toString()
+        val imported = getSharedPreferences("mortimer_library", MODE_PRIVATE)
+            .getStringSet("audio", emptySet()).orEmpty()
+        if (imported.any { row -> row.substringBefore('\t') == rawUri }) return true
+
+        // MediaStore audio rows use paths such as /external/audio/media/<id>.
+        return uri.authority == "media" && uri.pathSegments.any { it.equals("audio", ignoreCase = true) }
     }
 
     private fun allAudioUris(): List<Uri> {
