@@ -97,9 +97,14 @@ class PdfReaderActivity : Activity() {
             val scale = screenWidth.toFloat() / page.width
             val bitmap = Bitmap.createBitmap(screenWidth, (page.height * scale).toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
             bitmap.eraseColor(Color.WHITE)
-            page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-            page.close()
+            try {
+                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+            } finally {
+                page.close()
+            }
+            val previousBitmap = pageImage.drawable?.let { (it as? android.graphics.drawable.BitmapDrawable)?.bitmap }
             pageImage.setImageBitmap(bitmap)
+            if (previousBitmap != null && previousBitmap !== bitmap && !previousBitmap.isRecycled) previousBitmap.recycle()
             pageIndex = index
             pageLabel.text = "${index + 1} / ${pdf.pageCount}"
             previous.isEnabled = index > 0
