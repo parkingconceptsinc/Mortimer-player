@@ -31,7 +31,10 @@ class CarMediaService : MediaBrowserServiceCompat() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        player = ExoPlayer.Builder(this).build()
+        player = ExoPlayer.Builder(this).build().apply {
+            setAudioAttributes(androidx.media3.common.AudioAttributes.DEFAULT, true)
+            setHandleAudioBecomingNoisy(true)
+        }
         session = MediaSessionCompat(this, "MortimerPlayer").apply {
             setFlags(
                 MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS or
@@ -60,13 +63,19 @@ class CarMediaService : MediaBrowserServiceCompat() {
                 }
 
                 override fun onSkipToNext() {
-                    if (player.hasNextMediaItem()) player.seekToNextMediaItem()
-                    player.play()
+                    if (player.hasNextMediaItem()) {
+                        player.seekToNextMediaItem()
+                        player.play()
+                    }
+                    updatePlaybackState()
                 }
 
                 override fun onSkipToPrevious() {
-                    if (player.hasPreviousMediaItem()) player.seekToPreviousMediaItem()
-                    player.play()
+                    if (player.hasPreviousMediaItem()) {
+                        player.seekToPreviousMediaItem()
+                        player.play()
+                    }
+                    updatePlaybackState()
                 }
 
                 override fun onSeekTo(pos: Long) {
@@ -103,6 +112,11 @@ class CarMediaService : MediaBrowserServiceCompat() {
                 mediaItem?.localConfiguration?.uri?.let { uri ->
                     metadataFor(uri)?.let(session::setMetadata)
                 }
+                updatePlaybackState()
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                updatePlaybackState()
             }
         })
     }
@@ -184,7 +198,8 @@ class CarMediaService : MediaBrowserServiceCompat() {
         val projection = arrayOf(
             MediaStore.Audio.Media.TITLE,
             MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.ALBUM
+            MediaStore.Audio.Media.ALBUM,
+            MediaStore.Audio.Media.DURATION
         )
         return try {
             contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
@@ -192,12 +207,13 @@ class CarMediaService : MediaBrowserServiceCompat() {
                 val title = cursor.getString(0) ?: "Unknown title"
                 val artist = cursor.getString(1) ?: "Unknown artist"
                 val album = cursor.getString(2) ?: ""
+                val duration = cursor.getLong(3).coerceAtLeast(0L)
                 MediaMetadataCompat.Builder()
                     .putString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID, uri.toString())
                     .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
                     .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
                     .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, album)
-                    .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, 0L)
+                    .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
                     .build()
             }
         } catch (_: SecurityException) {
