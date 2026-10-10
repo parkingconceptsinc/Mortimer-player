@@ -127,10 +127,6 @@ class CarMediaService : MediaBrowserServiceCompat() {
     }
 
     override fun onLoadChildren(parentId: String, result: Result<List<MediaBrowserCompat.MediaItem>>) {
-        if (!hasAudioPermission()) {
-            result.sendResult(emptyList())
-            return
-        }
         if (parentId == ROOT_ID) {
             result.sendResult(listOf(
                 MediaBrowserCompat.MediaItem(
@@ -158,7 +154,7 @@ class CarMediaService : MediaBrowserServiceCompat() {
             MediaStore.Audio.Media.ALBUM
         )
         try {
-            contentResolver.query(
+            if (hasAudioPermission()) contentResolver.query(
                 collection,
                 projection,
                 "${MediaStore.Audio.Media.IS_MUSIC} != 0",
@@ -188,10 +184,9 @@ class CarMediaService : MediaBrowserServiceCompat() {
                 }
             }
         } catch (_: SecurityException) {
-            result.sendResult(emptyList())
-            return
+            // Continue below: SAF-imported audio may still be available without MediaStore permission.
         }
-        val knownUris = items.mapNotNullTo(mutableSetOf()) { item -> item.description.mediaUri?.toString() }
+        val knownUris = items.mapNotNullTo(mutableSetOf()) { item -> item.mediaId }
         val imported = getSharedPreferences("mortimer_library", MODE_PRIVATE)
             .getStringSet("audio", emptySet()).orEmpty()
         imported.forEach { row ->
