@@ -194,7 +194,7 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
     val comicPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         uris.forEach { uri ->
             rememberPermission(context, uri)
-            addMediaIfMissing(comics, LocalMedia(uri, displayName(context, uri, "Cómic"), "*/*"))
+            addMediaIfMissing(comics, LocalMedia(uri, displayName(context, uri, "Comic"), "*/*"))
         }
         saveMedia(context, "comics", comics)
     }
@@ -236,7 +236,7 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 NavChip("Inicio", section == "Inicio") { section = "Inicio" }
                 NavChip("Music", section == "Music") { section = "Music" }
-                NavChip("Servicios", section == "Servicios") { section = "Servicios" }
+                NavChip("Services", section == "Services") { section = "Services" }
             }
             Spacer(Modifier.height(14.dp))
             when (section) {
@@ -246,12 +246,12 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                     HomeCard("♫", "Music", "Files from your phone, SD card, or USB drive", audio.size.toString() + " files") { section = "Music" }
                     HomeCard("▣", "Videos", "Your local videos", videos.size.toString() + " files") { section = "Videos" }
                     HomeCard("▤", "Books", "EPUB, PDF, and other documents", books.size.toString() + " files") { section = "Books" }
-                    HomeCard("▧", "Comics", "Selecciona tus files de cómic", comics.size.toString() + " files") { section = "Comics" }
-                    HomeCard("♫", "Music services", "Spotify y servicios compatibles", "Connect") { section = "Servicios" }
+                    HomeCard("▧", "Comics", "Select your comic files", comics.size.toString() + " files") { section = "Comics" }
+                    HomeCard("♫", "Music services", "Spotify and compatible services", "Connect") { section = "Services" }
                 }
                 "Music" -> {
                     Button(onClick = { audioPicker.launch(arrayOf("audio/*")) }, colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF111114))) { Text("＋ Add music") }
-                    if (audio.isEmpty()) EmptyMessage("Elige files de audio del teléfono, una tarjeta SD o una memoria USB.")
+                    if (audio.isEmpty()) EmptyMessage("Select audio files from your phone, an SD card, or a USB drive.")
                     LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         items(audio) { item ->
                             MediaRow(item.title, "Local audio") {
@@ -265,9 +265,9 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                         }
                     }
                 }
-                "Servicios" -> {
+                "Services" -> {
                     HomeCard("♫", "Spotify", "Open the official Spotify app", "Open") { openSpotify() }
-                    Text("Spotify se reproduce en su aplicación oficial. Mortimer Player utiliza su reproductor nativo para los files locales.", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 12.dp))
+                    Text("Spotify plays in its official app. Mortimer Player uses its built-in player for local files.", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 12.dp))
                 }
                 "Videos" -> {
                     Button(onClick = { videoPicker.launch(arrayOf("video/*")) }) { Text("＋ Add videos") }
@@ -316,7 +316,7 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                 }
                 "Comics" -> {
                     Button(onClick = { comicPicker.launch(arrayOf("application/zip", "application/x-cbz", "application/pdf", "*/*")) }) { Text("＋ Import comics") }
-                    if (comics.isEmpty()) EmptyMessage("Importa files CBZ para leerlos aquí. CBR requiere una aplicación compatible.")
+                    if (comics.isEmpty()) EmptyMessage("Import CBZ files to read them here. CBR files require a compatible app.")
                     LazyColumn(modifier = Modifier.weight(1f)) { items(comics) { item ->
                         MediaRow(item.title, "Comic file") {
                             if (item.title.substringBefore("?").lowercase().endsWith(".cbz")) {
