@@ -29,6 +29,7 @@ import com.google.common.util.concurrent.ListenableFuture
 class PlaybackService : MediaLibraryService() {
     private var librarySession: MediaLibrarySession? = null
     private lateinit var player: ExoPlayer
+    private val searchResults = linkedMapOf<String, List<MediaItem>>()
 
     override fun onCreate() {
         super.onCreate()
@@ -90,6 +91,39 @@ class PlaybackService : MediaLibraryService() {
             )
         }
 
+        override fun onSearch(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            query: String,
+            params: MediaLibraryService.LibraryParams?
+        ): ListenableFuture<LibraryResult<Void>> {
+            val results = findAudioMatches(query)
+            rememberSearchResults(query, results)
+            session.notifySearchResultChanged(browser, query, results.size, params)
+            return Futures.immediateFuture(LibraryResult.ofVoid())
+        }
+
+        override fun onGetSearchResult(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            query: String,
+            page: Int,
+            pageSize: Int,
+            params: MediaLibraryService.LibraryParams?
+        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
+            val allMatches = searchResults[query] ?: findAudioMatches(query)
+            val from = (page.toLong() * pageSize.toLong())
+                .coerceIn(0L, allMatches.size.toLong()).toInt()
+            val to = (from.toLong() + pageSize.toLong())
+                .coerceAtMost(allMatches.size.toLong()).toInt()
+            return Futures.immediateFuture(
+                LibraryResult.ofItemList(
+                    ImmutableList.copyOf(allMatches.subList(from, to)),
+                    params
+                )
+            )
+        }
+
         override fun onGetItem(
             session: MediaLibrarySession,
             browser: MediaSession.ControllerInfo,
@@ -125,9 +159,8 @@ class PlaybackService : MediaLibraryService() {
                 )
             }
 
-            val lastPlayedUri = getSharedPreferences("mortimer_library", MODE_PRIVATE)
-                .getString(LAST_PLAYED_URI_KEY, null)
-            val selectedIndex = library.indexOfFirst { it.mediaId == lastPlayedUri }
+            val lastPlayed = lastPlayedItem(library)
+            val selectedIndex = library.indexOfFirst { it.mediaId == lastPlayed?.mediaId }
                 .takeIf { it >= 0 } ?: 0
 
             // Media3 1.6.1 uses the two-argument callback, so return the queue
@@ -142,18 +175,30 @@ class PlaybackService : MediaLibraryService() {
             controller: MediaSession.ControllerInfo,
             mediaItems: List<MediaItem>
         ): ListenableFuture<List<MediaItem>> {
-            val resolved = mediaItems.mapNotNull { item ->
-                resolveUri(item)?.let { uri ->
-                    MediaItem.Builder()
-                        .setMediaId(uri.toString())
-                        .setUri(uri)
-                        .setMediaMetadata(
-                            item.mediaMetadata.buildUpon()
-                                .setTitle(item.mediaMetadata.title ?: displayName(uri))
-                                .setIsPlayable(true)
-                                .build()
-                        )
-                        .build()
+            val resolved = mutableListOf<MediaItem>()
+            mediaItems.forEach { item ->
+                val searchQuery = item.requestMetadata.searchQuery
+                if (searchQuery != null) {
+                    val library = loadAudioLibrary()
+                    val selected = if (searchQuery.isBlank()) {
+                        lastPlayedItem(library) ?: library.firstOrNull()
+                    } else {
+                        findAudioMatches(searchQuery).firstOrNull()
+                    }
+                    if (selected != null) resolved += selected
+                } else {
+                    resolveUri(item)?.let { uri ->
+                        resolved += MediaItem.Builder()
+                            .setMediaId(uri.toString())
+                            .setUri(uri)
+                            .setMediaMetadata(
+                                item.mediaMetadata.buildUpon()
+                                    .setTitle(item.mediaMetadata.title ?: displayName(uri))
+                                    .setIsPlayable(true)
+                                    .build()
+                            )
+                            .build()
+                    }
                 }
             }
             return Futures.immediateFuture(resolved)
@@ -285,6 +330,38 @@ class PlaybackService : MediaLibraryService() {
         return items.values.toList()
     }
 
+    private fun findAudioMatches(query: String): List<MediaItem> {
+        val normalized = query.trim().lowercase()
+        val library = loadAudioLibrary()
+        if (normalized.isEmpty()) return library
+
+        return library.filter { item ->
+            val metadata = item.mediaMetadata
+            sequenceOf(metadata.title, metadata.artist, metadata.albumTitle)
+                .filterNotNull()
+                .any { it.toString().lowercase().contains(normalized) }
+        }.sortedWith(
+            compareBy<MediaItem> {
+                if (it.mediaMetadata.title?.toString()?.equals(normalized, ignoreCase = true) == true) 0 else 1
+            }.thenBy {
+                if (it.mediaMetadata.title?.toString()?.startsWith(normalized, ignoreCase = true) == true) 0 else 1
+            }.thenBy { it.mediaMetadata.title?.toString()?.lowercase().orEmpty() }
+        )
+    }
+
+    private fun rememberSearchResults(query: String, results: List<MediaItem>) {
+        if (searchResults.size >= MAX_CACHED_SEARCHES && query !in searchResults) {
+            searchResults.remove(searchResults.keys.first())
+        }
+        searchResults[query] = results
+    }
+
+    private fun lastPlayedItem(library: List<MediaItem>): MediaItem? {
+        val lastPlayedUri = getSharedPreferences("mortimer_library", MODE_PRIVATE)
+            .getString(LAST_PLAYED_URI_KEY, null)
+        return library.firstOrNull { it.mediaId == lastPlayedUri }
+    }
+
     private fun buildAudioItem(uri: Uri, title: String, artist: String, album: String): MediaItem =
         MediaItem.Builder()
             .setMediaId(uri.toString())
@@ -332,5 +409,6 @@ class PlaybackService : MediaLibraryService() {
     companion object {
         private const val ROOT_ID = "mortimer_root"
         private const val LAST_PLAYED_URI_KEY = "last_played_uri"
+        private const val MAX_CACHED_SEARCHES = 12
     }
 }
