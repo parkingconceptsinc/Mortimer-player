@@ -550,23 +550,31 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                             ?: throw IllegalStateException("Could not open the selected folder.")
                         collectFolderMedia(context, root)
                     }
+                    val existingByUri = mapOf(
+                        "audio" to audio.associateBy { it.uri },
+                        "videos" to videos.associateBy { it.uri },
+                        "books" to books.associateBy { it.uri },
+                        "comics" to comics.associateBy { it.uri }
+                    )
+                    val existingUris = existingByUri.mapValues { (_, items) -> items.keys }
+                    val uniqueScanned = scanned.distinctBy { (category, item) -> "$category:${item.uri}" }
                     val enriched = withContext(Dispatchers.IO) {
-                        scanned.mapIndexed { index, pair ->
-                            if (index > 0 && index % 4 == 0) {
-                                withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                    libraryScanStatus = "Reading metadata: $index of ${scanned.size}…"
+                        uniqueScanned.mapIndexed { index, pair ->
+                            if (index > 0 && index % 8 == 0) {
+                                withContext(Dispatchers.Main) {
+                                    libraryScanStatus = "Indexing files: $index of ${uniqueScanned.size}…"
                                 }
                             }
                             val (category, item) = pair
-                            category to if (category == "audio" || category == "videos") enrichMediaMetadata(context, item) else item
+                            val previous = existingByUri[category]?.get(item.uri)
+                            val result = when {
+                                previous != null -> previous.copy(folder = item.folder)
+                                category == "audio" || category == "videos" -> enrichMediaMetadata(context, item)
+                                else -> item
+                            }
+                            category to result
                         }
                     }
-                    val existingUris = mapOf(
-                        "audio" to audio.map { it.uri }.toSet(),
-                        "videos" to videos.map { it.uri }.toSet(),
-                        "books" to books.map { it.uri }.toSet(),
-                        "comics" to comics.map { it.uri }.toSet()
-                    )
                     val uniqueEnriched = enriched.distinctBy { (category, item) -> "$category:${item.uri}" }
                     uniqueEnriched.forEach { (category, item) ->
                         when (category) {
