@@ -438,10 +438,19 @@ private fun displayName(context: Context, uri: Uri, fallback: String): String {
     }.getOrNull()?.takeIf { it.isNotBlank() } ?: fallback
 }
 
-private fun rememberPermission(context: Context, uri: Uri) {
+private fun rememberPermission(context: Context, uri: Uri): Boolean {
+    val resolver = context.contentResolver
     runCatching {
-        context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        if (resolver.persistedUriPermissions.any { it.uri == uri && it.isReadPermission }) {
+            return true
+        }
+        resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }.onFailure {
+        android.util.Log.w("MortimerLibrary", "Could not persist read access for $uri", it)
     }
+    return runCatching {
+        resolver.persistedUriPermissions.any { it.uri == uri && it.isReadPermission }
+    }.getOrDefault(false)
 }
 
 @Composable
@@ -498,7 +507,7 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
 
     fun importSelectedFiles(uris: List<Uri>, category: String, target: MutableList<LocalMedia>, mime: String, fallback: String) {
         if (uris.isEmpty()) return
-        uris.forEach { rememberPermission(context, it) }
+        val permissionWarningCount = uris.distinct().count { !rememberPermission(context, it) }
         coroutineScope.launch {
             libraryScanStatus = "Reading metadata for ${uris.distinct().size} selected file(s)…"
             try {
@@ -517,7 +526,8 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                 prepared.forEach { addMediaIfMissing(target, it) }
                 saveMedia(context, category, target)
                 val addedCount = prepared.count { it.uri !in existingUris }
-                libraryScanStatus = "Imported $addedCount new file(s); refreshed ${prepared.size - addedCount} existing item(s)."
+                libraryScanStatus = "Imported $addedCount new file(s); refreshed ${prepared.size - addedCount} existing item(s)." +
+                    if (permissionWarningCount > 0) " Android could not save access for $permissionWarningCount file(s); re-import them if access is lost after restart." else ""
             } catch (error: Exception) {
                 libraryScanStatus = "Import failed: ${error.localizedMessage ?: "Check file access and try again."}"
             }
@@ -539,9 +549,7 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
 
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { treeUri ->
         if (treeUri != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
+            val folderPermissionSaved = rememberPermission(context, treeUri)
             coroutineScope.launch {
                 libraryScanStatus = "Scanning folder and subfolders…"
                 try {
@@ -589,7 +597,8 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                     saveMedia(context, "books", books)
                     saveMedia(context, "comics", comics)
                     val addedCount = uniqueEnriched.count { (category, item) -> item.uri !in (existingUris[category] ?: emptySet()) }
-                    libraryScanStatus = "Folder scan complete: $addedCount new file(s); refreshed ${uniqueEnriched.size - addedCount} existing item(s)."
+                    libraryScanStatus = "Folder scan complete: $addedCount new file(s); refreshed ${uniqueEnriched.size - addedCount} existing item(s)." +
+                        if (!folderPermissionSaved) " Android could not save folder access; re-import this folder if access is lost after restart." else ""
                 } catch (error: Exception) {
                     libraryScanStatus = "Folder scan failed: ${error.localizedMessage ?: "Check folder access and try again."}"
                 }
