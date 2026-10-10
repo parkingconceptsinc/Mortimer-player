@@ -17,6 +17,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
+import androidx.media3.session.SessionError
 import androidx.media3.session.MediaSession.MediaItemsWithStartPosition
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
@@ -131,7 +132,7 @@ class PlaybackService : MediaLibraryService() {
         ): ListenableFuture<LibraryResult<MediaItem>> {
             val uri = runCatching { Uri.parse(mediaId) }.getOrNull()
             if (uri == null || uri.scheme == null) {
-                return Futures.immediateFuture(LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE))
+                return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_BAD_VALUE))
             }
             val item = MediaItem.Builder()
                 .setMediaId(uri.toString())
@@ -147,7 +148,7 @@ class PlaybackService : MediaLibraryService() {
             return Futures.immediateFuture(LibraryResult.ofItem(item, null))
         }
 
-        @OptIn(UnstableApi::class)
+        @UnstableApi
         override fun onPlaybackResumption(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo
@@ -204,7 +205,7 @@ class PlaybackService : MediaLibraryService() {
             return Futures.immediateFuture(resolved)
         }
 
-        @OptIn(UnstableApi::class)
+        @UnstableApi
         override fun onSetMediaItems(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
