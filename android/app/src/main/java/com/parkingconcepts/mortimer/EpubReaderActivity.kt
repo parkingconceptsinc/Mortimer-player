@@ -23,6 +23,8 @@ class EpubReaderActivity : Activity() {
     private lateinit var heading: TextView
     private lateinit var body: TextView
     private lateinit var scroll: ScrollView
+    private lateinit var previousChapter: Button
+    private lateinit var nextChapter: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -91,8 +93,10 @@ class EpubReaderActivity : Activity() {
         }
         scroll.addView(body)
         val controls = LinearLayout(this).apply { gravity = Gravity.CENTER }
-        controls.addView(Button(this).apply { text = "← Previous chapter"; setOnClickListener { showChapter(chapterIndex - 1) } })
-        controls.addView(Button(this).apply { text = "Next →"; setOnClickListener { showChapter(chapterIndex + 1) } })
+        previousChapter = Button(this).apply { text = "← Previous chapter"; setOnClickListener { showChapter(chapterIndex - 1) } }
+        nextChapter = Button(this).apply { text = "Next →"; setOnClickListener { showChapter(chapterIndex + 1) } }
+        controls.addView(previousChapter)
+        controls.addView(nextChapter)
         root.addView(heading)
         root.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         root.addView(controls)
@@ -109,6 +113,8 @@ class EpubReaderActivity : Activity() {
         val content = chapters[chapterIndex].second
         val split = content.indexOf("\n\n")
         heading.text = "Chapter ${chapterIndex + 1} of ${chapters.size}"
+        previousChapter.isEnabled = chapterIndex > 0
+        nextChapter.isEnabled = chapterIndex < chapters.lastIndex
         body.text = content.substring(0, split) + "\n\n" + content.substring(split + 2)
         scroll.scrollTo(0, 0)
     }

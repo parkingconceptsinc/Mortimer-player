@@ -22,6 +22,8 @@ class ComicReaderActivity : Activity() {
     private var pageIndex = 0
     private lateinit var image: ImageView
     private lateinit var status: TextView
+    private lateinit var previousPage: Button
+    private lateinit var nextPage: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,8 +69,10 @@ class ComicReaderActivity : Activity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER
             }
-            controls.addView(Button(this).apply { text = "← Previous"; setOnClickListener { showPage(pageIndex - 1) } })
-            controls.addView(Button(this).apply { text = "Next →"; setOnClickListener { showPage(pageIndex + 1) } })
+            previousPage = Button(this).apply { text = "← Previous"; setOnClickListener { showPage(pageIndex - 1) } }
+            nextPage = Button(this).apply { text = "Next →"; setOnClickListener { showPage(pageIndex + 1) } }
+            controls.addView(previousPage)
+            controls.addView(nextPage)
             root.addView(heading)
             root.addView(status)
             root.addView(image)
@@ -91,6 +95,8 @@ class ComicReaderActivity : Activity() {
                 .putInt(readingProgressKey(uri), pageIndex).apply()
         }
         val entry = zip?.getEntry(pages[pageIndex]) ?: return
+        previousPage.isEnabled = pageIndex > 0
+        nextPage.isEnabled = pageIndex < pages.lastIndex
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         zip!!.getInputStream(entry).use { BitmapFactory.decodeStream(it, null, bounds) }
         val targetWidth = resources.displayMetrics.widthPixels - 32
