@@ -377,7 +377,8 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
     val books = remember { mutableStateListOf<LocalMedia>().apply { addAll(loadMedia(context, "books", "*/*")) } }
     val comics = remember { mutableStateListOf<LocalMedia>().apply { addAll(loadMedia(context, "comics", "*/*")) } }
     val preferences = remember { context.getSharedPreferences("mortimer_library", Context.MODE_PRIVATE) }
-    var section by remember { mutableStateOf("Home") }
+    var section by remember { mutableStateOf(preferences.getString("last_section", "Home") ?: "Home") }
+    LaunchedEffect(section) { preferences.edit().putString("last_section", section).apply() }
     var currentTitle by remember { mutableStateOf(player.currentMediaItem?.mediaMetadata?.title?.toString() ?: "Nothing is playing") }
     var currentVideoUri by remember { mutableStateOf<Uri?>(null) }
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
