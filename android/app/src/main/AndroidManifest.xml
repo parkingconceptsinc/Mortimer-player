@@ -11,6 +11,8 @@
 
     <application
         android:allowBackup="true"
+        android:icon="@drawable/ic_mortimer"
+        android:roundIcon="@drawable/ic_mortimer"
         android:label="Mortimer Player"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
