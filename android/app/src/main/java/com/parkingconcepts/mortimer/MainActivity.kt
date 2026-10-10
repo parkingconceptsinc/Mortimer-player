@@ -23,6 +23,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -891,17 +892,30 @@ private fun HomeCard(icon: String, title: String, subtitle: String, trailing: St
 }
 
 @Composable
-private fun MediaRow(title: String, subtitle: String, onClick: () -> Unit) {
+private fun MediaRow(
+    title: String,
+    subtitle: String,
+    trailing: (@Composable () -> Unit)? = null,
+    onClick: () -> Unit
+) {
     Card(onClick = onClick, colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
         Row(Modifier.padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("♫", color = Accent, fontSize = 20.sp)
             Column(Modifier.weight(1f).padding(start = 12.dp)) {
                 Text(title, color = MainText, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(subtitle, color = Muted, fontSize = 12.sp)
+                Text(subtitle.ifBlank { "Local media" }, color = Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Text("Open", color = Accent, fontSize = 12.sp)
+            if (trailing != null) trailing() else Text("Open", color = Accent, fontSize = 12.sp)
         }
     }
+}
+
+private const val MAX_RECENT_TRACKS = 250
+
+private fun formatMediaDuration(durationMs: Long): String {
+    if (durationMs <= 0L) return ""
+    val totalSeconds = durationMs / 1000L
+    return "${totalSeconds / 60}:${(totalSeconds % 60).toString().padStart(2, '0')}"
 }
 
 @Composable
