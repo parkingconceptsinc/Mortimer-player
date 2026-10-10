@@ -11,10 +11,12 @@ import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaSession.MediaItemsWithStartPosition
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -119,16 +121,13 @@ class PlaybackService : MediaLibraryService() {
             mediaItems: List<MediaItem>
         ): ListenableFuture<List<MediaItem>> {
             val resolved = mediaItems.mapNotNull { item ->
-                val uri = item.localConfiguration?.uri
-                    ?: item.mediaId.takeIf { it.startsWith("content://") || it.startsWith("file://") }
-                        ?.let { runCatching { Uri.parse(it) }.getOrNull() }
-                uri?.let {
+                resolveUri(item)?.let { uri ->
                     MediaItem.Builder()
-                        .setMediaId(it.toString())
-                        .setUri(it)
+                        .setMediaId(uri.toString())
+                        .setUri(uri)
                         .setMediaMetadata(
                             item.mediaMetadata.buildUpon()
-                                .setTitle(item.mediaMetadata.title ?: displayName(it))
+                                .setTitle(item.mediaMetadata.title ?: displayName(uri))
                                 .setIsPlayable(true)
                                 .build()
                         )
@@ -136,6 +135,74 @@ class PlaybackService : MediaLibraryService() {
                 }
             }
             return Futures.immediateFuture(resolved)
+        }
+
+        @OptIn(UnstableApi::class)
+        override fun onSetMediaItems(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: List<MediaItem>,
+            startIndex: Int,
+            startPositionMs: Long
+        ): ListenableFuture<MediaItemsWithStartPosition> {
+            // When Android Auto requests one song, expand it into the audio library
+            // and preserve the selected song as the queue's starting position.
+            if (mediaItems.size == 1 &&
+                (mediaSession.isAutomotiveController(controller) ||
+                    mediaSession.isAutoCompanionController(controller))
+            ) {
+                val selectedUri = resolveUri(mediaItems.first())
+                val queueUris = allAudioUris()
+                val selectedIndex = queueUris.indexOf(selectedUri)
+                if (selectedUri != null && selectedIndex >= 0) {
+                    val queue = queueUris.map { uri ->
+                        MediaItem.Builder()
+                            .setMediaId(uri.toString())
+                            .setUri(uri)
+                            .setMediaMetadata(
+                                MediaMetadata.Builder()
+                                    .setTitle(displayName(uri))
+                                    .setArtist("Audio local")
+                                    .setIsBrowsable(false)
+                                    .setIsPlayable(true)
+                                    .build()
+                            )
+                            .build()
+                    }
+                    return Futures.immediateFuture(
+                        MediaItemsWithStartPosition(queue, selectedIndex, startPositionMs)
+                    )
+                }
+            }
+
+            return Futures.immediateFuture(
+                MediaItemsWithStartPosition(
+                    mediaItems.mapNotNull { item ->
+                        resolveUri(item)?.let { uri ->
+                            MediaItem.Builder()
+                                .setMediaId(uri.toString())
+                                .setUri(uri)
+                                .setMediaMetadata(
+                                    item.mediaMetadata.buildUpon()
+                                        .setTitle(item.mediaMetadata.title ?: displayName(uri))
+                                        .setIsPlayable(true)
+                                        .build()
+                                )
+                                .build()
+                        }
+                    },
+                    startIndex,
+                    startPositionMs
+                )
+            )
+        }
+
+        private fun resolveUri(item: MediaItem): Uri? {
+            item.localConfiguration?.uri?.let { return it }
+            item.requestMetadata.mediaUri?.let { return it }
+            val rawId = item.mediaId
+            if (!rawId.startsWith("content://") && !rawId.startsWith("file://")) return null
+            return runCatching { Uri.parse(rawId) }.getOrNull()
         }
     }
 
