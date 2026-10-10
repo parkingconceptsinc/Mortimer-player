@@ -82,21 +82,7 @@ class PlaybackService : MediaLibraryService() {
             if (parentId != ROOT_ID) {
                 return Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.of(), params))
             }
-            val allItems = allAudioUris().map { uri ->
-                val title = displayName(uri)
-                MediaItem.Builder()
-                    .setMediaId(uri.toString())
-                    .setUri(uri)
-                    .setMediaMetadata(
-                        MediaMetadata.Builder()
-                            .setTitle(title)
-                            .setArtist("Local audio")
-                            .setIsBrowsable(false)
-                            .setIsPlayable(true)
-                            .build()
-                    )
-                    .build()
-            }
+            val allItems = loadAudioLibrary()
             val from = (page * pageSize).coerceIn(0, allItems.size)
             val to = (from + pageSize).coerceAtMost(allItems.size)
             return Futures.immediateFuture(
@@ -133,8 +119,8 @@ class PlaybackService : MediaLibraryService() {
             controller: MediaSession.ControllerInfo,
             isForPlayback: Boolean
         ): ListenableFuture<MediaItemsWithStartPosition> {
-            val uris = allAudioUris()
-            if (uris.isEmpty()) {
+            val library = loadAudioLibrary()
+            if (library.isEmpty()) {
                 return Futures.immediateFailedFuture(
                     IllegalStateException("No local audio is available for playback resumption.")
                 )
@@ -142,16 +128,12 @@ class PlaybackService : MediaLibraryService() {
 
             val lastPlayedUri = getSharedPreferences("mortimer_library", MODE_PRIVATE)
                 .getString(LAST_PLAYED_URI_KEY, null)
-            val selectedIndex = uris.indexOfFirst { it.toString() == lastPlayedUri }
+            val selectedIndex = library.indexOfFirst { it.mediaId == lastPlayedUri }
                 .takeIf { it >= 0 } ?: 0
 
             // The system can request metadata only after reboot. Return one item in
             // that case; return the complete queue when playback should actually resume.
-            val items = if (isForPlayback) {
-                uris.map { uri -> createPlayableItem(uri) }
-            } else {
-                listOf(createPlayableItem(uris[selectedIndex]))
-            }
+            val items = if (isForPlayback) library else listOf(library[selectedIndex])
             val startIndex = if (isForPlayback) selectedIndex else 0
             return Futures.immediateFuture(
                 MediaItemsWithStartPosition(items, startIndex, C.TIME_UNSET)
@@ -195,23 +177,9 @@ class PlaybackService : MediaLibraryService() {
                 // Avoid rescanning the entire audio library when the app selects a
                 // single video or another non-audio item.
                 if (selectedUri != null && isKnownAudioUri(selectedUri)) {
-                    val queueUris = allAudioUris()
-                    val selectedIndex = queueUris.indexOf(selectedUri)
+                    val queue = loadAudioLibrary()
+                    val selectedIndex = queue.indexOfFirst { it.localConfiguration?.uri == selectedUri }
                     if (selectedIndex >= 0) {
-                        val queue = queueUris.map { uri ->
-                            MediaItem.Builder()
-                                .setMediaId(uri.toString())
-                                .setUri(uri)
-                                .setMediaMetadata(
-                                    MediaMetadata.Builder()
-                                        .setTitle(displayName(uri))
-                                        .setArtist("Local audio")
-                                        .setIsBrowsable(false)
-                                        .setIsPlayable(true)
-                                        .build()
-                                )
-                                .build()
-                        }
                         return Futures.immediateFuture(
                             MediaItemsWithStartPosition(queue, selectedIndex, startPositionMs)
                         )
@@ -250,20 +218,6 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
-    private fun createPlayableItem(uri: Uri): MediaItem =
-        MediaItem.Builder()
-            .setMediaId(uri.toString())
-            .setUri(uri)
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(displayName(uri))
-                    .setArtist("Local audio")
-                    .setIsBrowsable(false)
-                    .setIsPlayable(true)
-                    .build()
-            )
-            .build()
-
     private fun isKnownAudioUri(uri: Uri): Boolean {
         val rawUri = uri.toString()
         val imported = getSharedPreferences("mortimer_library", MODE_PRIVATE)
@@ -274,25 +228,44 @@ class PlaybackService : MediaLibraryService() {
         return uri.authority == "media" && uri.pathSegments.any { it.equals("audio", ignoreCase = true) }
     }
 
-    private fun allAudioUris(): List<Uri> {
-        val ordered = linkedSetOf<Uri>()
+    private fun loadAudioLibrary(): List<MediaItem> {
+        val items = linkedMapOf<Uri, MediaItem>()
         if (hasAudioPermission()) {
             val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            val projection = arrayOf(
+                MediaStore.Audio.Media._ID,
+                MediaStore.Audio.Media.TITLE,
+                MediaStore.Audio.Media.ARTIST,
+                MediaStore.Audio.Media.ALBUM,
+                MediaStore.MediaColumns.DISPLAY_NAME
+            )
             runCatching {
                 contentResolver.query(
                     collection,
-                    arrayOf(MediaStore.Audio.Media._ID),
+                    projection,
                     "${MediaStore.Audio.Media.IS_MUSIC} != 0",
                     null,
                     "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
                 )?.use { cursor ->
                     val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                    val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+                    val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+                    val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+                    val fileNameColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
                     while (cursor.moveToNext()) {
-                        ordered.add(ContentUris.withAppendedId(collection, cursor.getLong(idColumn)))
+                        val uri = ContentUris.withAppendedId(collection, cursor.getLong(idColumn))
+                        val title = cursor.getString(titleColumn)?.takeIf { it.isNotBlank() }
+                            ?: cursor.getString(fileNameColumn)?.takeIf { it.isNotBlank() }
+                            ?: "Unknown title"
+                        val artist = cursor.getString(artistColumn)?.takeIf { it.isNotBlank() }
+                            ?: "Unknown artist"
+                        val album = cursor.getString(albumColumn)?.takeIf { it.isNotBlank() }.orEmpty()
+                        items[uri] = buildAudioItem(uri, title, artist, album)
                     }
                 }
             }
         }
+
         val imported = getSharedPreferences("mortimer_library", MODE_PRIVATE)
             .getStringSet("audio", emptySet()).orEmpty()
             .mapNotNull { row ->
@@ -300,11 +273,35 @@ class PlaybackService : MediaLibraryService() {
                 if (parts.size == 2 && parts[0].isNotBlank()) parts[0] to parts[1] else null
             }
             .sortedBy { it.second.lowercase() }
-        imported.forEach { (rawUri, _) ->
-            runCatching { Uri.parse(rawUri) }.getOrNull()?.let(ordered::add)
+        imported.forEach { (rawUri, title) ->
+            runCatching { Uri.parse(rawUri) }.getOrNull()?.let { uri ->
+                if (uri !in items) {
+                    items[uri] = buildAudioItem(
+                        uri,
+                        title.ifBlank { "Unknown title" },
+                        "Imported local audio",
+                        ""
+                    )
+                }
+            }
         }
-        return ordered.toList()
+        return items.values.toList()
     }
+
+    private fun buildAudioItem(uri: Uri, title: String, artist: String, album: String): MediaItem =
+        MediaItem.Builder()
+            .setMediaId(uri.toString())
+            .setUri(uri)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(title)
+                    .setArtist(artist)
+                    .setAlbumTitle(album)
+                    .setIsBrowsable(false)
+                    .setIsPlayable(true)
+                    .build()
+            )
+            .build()
 
     private fun displayName(uri: Uri): String {
         var name = uri.lastPathSegment?.substringAfterLast('/')?.ifBlank { null } ?: "Unknown title"
