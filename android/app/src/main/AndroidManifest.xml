@@ -5,11 +5,27 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
+    <queries>
+        <package android:name="com.spotify.music" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:label="Mortimer Player"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+        <activity
+            android:name=".PdfReaderActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ComicReaderActivity"
+            android:exported="false" />
+        <activity
+            android:name=".EpubReaderActivity"
+            android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -20,15 +36,22 @@
         </activity>
 
         <service
+            android:name=".PlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
+
+        <service
             android:name=".CarMediaService"
+            android:permission="android.permission.BIND_MEDIA_BROWSER_SERVICE"
             android:exported="true"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
-            <meta-data
-                android:name="android.media.browse"
-                android:resource="@xml/automotive_app_desc" />
         </service>
     </application>
 </manifest>

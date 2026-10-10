@@ -1,30 +1,30 @@
-# Mortimer Player for Android Auto
+# Mortimer Player para Android nativo
 
-This Android companion module adds a native Android media-browser service so Android Auto can browse and play audio indexed by Android's MediaStore. The phone activity opens the existing Mortimer Player web app.
+Este módulo Android está en transición desde el antiguo lanzador WebView a una aplicación nativa con Kotlin, Jetpack Compose y Media3. La PWA permanece separada en la raíz del repositorio y no se modifica por esta aplicación.
 
-## Requirements
+## Compilar
 
-- Android Studio with JDK 17 and Android SDK 35
-- Gradle 8.9 or compatible
-- Android phone for playback and Android Auto testing
-
-## Build
-
-Open the `android/` directory in Android Studio and sync Gradle. Or, with Gradle installed:
+Requisitos: Android Studio, JDK 17 y Android SDK 35. Desde la carpeta `android/`:
 
 ```sh
-cd android
 gradle assembleDebug
 ```
 
-The debug APK is generated at `app/build/outputs/apk/debug/app-debug.apk`.
+El APK de depuración se genera en `app/build/outputs/apk/debug/app-debug.apk`. El workflow de GitHub Actions también compila y publica el APK como artefacto descargable de la ejecución.
 
-## Android Auto behavior
+## Funciones de esta primera vista nativa
 
-- The car interface is provided by Android Auto, not by the web UI.
-- The media service exposes the audio files Android indexes on the device under **All music**.
-- Grant the audio permission on the phone before browsing media from the car.
-- Video, books, comics, and files imported only into the web app's browser storage are not exposed to Android Auto by this module.
-- This repository change does not publish an APK or grant Google Play approval. Test with Android Auto's Desktop Head Unit and a compatible phone/car before release.
+- Interfaz Android nativa con el estilo oscuro y acento coral de Mortimer Player.
+- Selección de archivos de audio con el selector de documentos de Android; permite navegar por almacenamiento interno, SD y unidades USB compatibles con el dispositivo.
+- Persistencia local de las selecciones de biblioteca y de los permisos de acceso a documentos, para conservar la biblioteca al cerrar y volver a abrir la app.
+- Reproducción local en cola mediante AndroidX Media3/ExoPlayer, con controles básicos de reproducir, pausar y siguiente. La interfaz se conecta a un servicio Media3 separado para mantener la sesión de audio cuando la actividad deja de estar visible; falta validarlo en un dispositivo real.
+- Selección y reproducción de vídeo dentro de la app mediante Media3.
+- Lectores nativos de PDF, EPUB de texto y CBZ dentro de la app; CBR se delega a una aplicación compatible. El lector EPUB ofrece navegación por capítulos y extracción de texto, no reproduce fielmente todos los diseños complejos, fuentes o estilos del formato.
+- Acceso directo a la aplicación oficial de Spotify, o a Spotify Web si la aplicación no está instalada.
+- Se conserva el servicio de medios de Android Auto existente, que requiere pruebas en un dispositivo y vehículo compatibles.
 
-The app uses the standard Android media-browser service architecture. See [Android's media apps guide](https://developer.android.com/training/cars/media).
+## Estado y limitaciones
+
+Esta es una versión preliminar de la conversión nativa, no una paridad funcional completa con la PWA. La persistencia básica de las selecciones ya está implementada; todavía faltan controles de reproducción completos, soporte CBR integrado, ecualizador, preferencias, validación real de reproducción en segundo plano y pruebas de Android Auto. Spotify se abre en su aplicación oficial: la reproducción completa de su catálogo dentro de Mortimer Player no está implementada.
+
+La app no usa WebView ni carga la PWA. No se afirma que el APK esté listo para distribución final hasta que el workflow compile correctamente y las funciones se prueben en dispositivos reales.

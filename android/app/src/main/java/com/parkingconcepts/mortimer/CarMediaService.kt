@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.media.MediaBrowserServiceCompat
@@ -31,7 +32,10 @@ class CarMediaService : MediaBrowserServiceCompat() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        player = ExoPlayer.Builder(this).build()
+        player = ExoPlayer.Builder(this).build().apply {
+            setAudioAttributes(androidx.media3.common.AudioAttributes.DEFAULT, true)
+            setHandleAudioBecomingNoisy(true)
+        }
         session = MediaSessionCompat(this, "MortimerPlayer").apply {
             setFlags(
                 MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS or
@@ -39,9 +43,21 @@ class CarMediaService : MediaBrowserServiceCompat() {
             )
             setCallback(object : MediaSessionCompat.Callback() {
                 override fun onPlay() {
-                    player.play()
+                    // Android Auto may send Play before a track has been selected.
+                    // Seed the player with the first available item instead of playing an empty queue.
+                    if (player.mediaItemCount == 0) {
+                        val first = allAudioUris().firstOrNull()
+                        if (first != null) {
+                            metadataFor(first)?.let(session::setMetadata)
+                            player.setMediaItem(MediaItem.fromUri(first))
+                            player.prepare()
+                        }
+                    }
+                    if (player.mediaItemCount > 0) player.play()
                     updatePlaybackState()
-                    startForeground(NOTIFICATION_ID, buildNotification("Playing music"))
+                    if (player.mediaItemCount > 0) {
+                        startForeground(NOTIFICATION_ID, buildNotification(session.controller.metadata?.description?.title?.toString() ?: "Playing music"))
+                    }
                 }
 
                 override fun onPause() {
@@ -60,13 +76,19 @@ class CarMediaService : MediaBrowserServiceCompat() {
                 }
 
                 override fun onSkipToNext() {
-                    if (player.hasNextMediaItem()) player.seekToNextMediaItem()
-                    player.play()
+                    if (player.hasNextMediaItem()) {
+                        player.seekToNextMediaItem()
+                        player.play()
+                    }
+                    updatePlaybackState()
                 }
 
                 override fun onSkipToPrevious() {
-                    if (player.hasPreviousMediaItem()) player.seekToPreviousMediaItem()
-                    player.play()
+                    if (player.hasPreviousMediaItem()) {
+                        player.seekToPreviousMediaItem()
+                        player.play()
+                    }
+                    updatePlaybackState()
                 }
 
                 override fun onSeekTo(pos: Long) {
@@ -79,7 +101,13 @@ class CarMediaService : MediaBrowserServiceCompat() {
                     val uri = Uri.parse(mediaId)
                     val metadata = metadataFor(uri) ?: return
                     session.setMetadata(metadata)
-                    player.setMediaItem(MediaItem.fromUri(uri))
+                    val queue = allAudioUris()
+                    val selectedIndex = queue.indexOf(uri)
+                    if (selectedIndex >= 0) {
+                        player.setMediaItems(queue.map { MediaItem.fromUri(it) }, selectedIndex, 0L)
+                    } else {
+                        player.setMediaItem(MediaItem.fromUri(uri))
+                    }
                     player.prepare()
                     player.play()
                     updatePlaybackState()
@@ -103,6 +131,11 @@ class CarMediaService : MediaBrowserServiceCompat() {
                 mediaItem?.localConfiguration?.uri?.let { uri ->
                     metadataFor(uri)?.let(session::setMetadata)
                 }
+                updatePlaybackState()
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                updatePlaybackState()
             }
         })
     }
@@ -112,10 +145,6 @@ class CarMediaService : MediaBrowserServiceCompat() {
     }
 
     override fun onLoadChildren(parentId: String, result: Result<List<MediaBrowserCompat.MediaItem>>) {
-        if (!hasAudioPermission()) {
-            result.sendResult(emptyList())
-            return
-        }
         if (parentId == ROOT_ID) {
             result.sendResult(listOf(
                 MediaBrowserCompat.MediaItem(
@@ -143,7 +172,7 @@ class CarMediaService : MediaBrowserServiceCompat() {
             MediaStore.Audio.Media.ALBUM
         )
         try {
-            contentResolver.query(
+            if (hasAudioPermission()) contentResolver.query(
                 collection,
                 projection,
                 "${MediaStore.Audio.Media.IS_MUSIC} != 0",
@@ -173,36 +202,106 @@ class CarMediaService : MediaBrowserServiceCompat() {
                 }
             }
         } catch (_: SecurityException) {
-            result.sendResult(emptyList())
-            return
+            // Continue below: SAF-imported audio may still be available without MediaStore permission.
+        }
+        val knownUris = items.mapNotNullTo(mutableSetOf()) { item -> item.mediaId }
+        val imported = getSharedPreferences("mortimer_library", MODE_PRIVATE)
+            .getStringSet("audio", emptySet()).orEmpty()
+        imported.forEach { row ->
+            val parts = row.split('\t', limit = 2)
+            if (parts.size == 2 && parts[0].isNotBlank() && knownUris.add(parts[0])) {
+                val uri = Uri.parse(parts[0])
+                items += MediaBrowserCompat.MediaItem(
+                    MediaDescriptionCompat.Builder()
+                        .setMediaId(uri.toString())
+                        .setMediaUri(uri)
+                        .setTitle(parts[1].ifBlank { "Unknown title" })
+                        .setSubtitle("Imported local audio")
+                        .build(),
+                    MediaBrowserCompat.MediaItem.FLAG_PLAYABLE
+                )
+            }
         }
         result.sendResult(items)
     }
 
-    private fun metadataFor(uri: Uri): MediaMetadataCompat? {
-        if (!hasAudioPermission()) return null
-        val projection = arrayOf(
-            MediaStore.Audio.Media.TITLE,
-            MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.ALBUM
-        )
-        return try {
-            contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
-                if (!cursor.moveToFirst()) return null
-                val title = cursor.getString(0) ?: "Unknown title"
-                val artist = cursor.getString(1) ?: "Unknown artist"
-                val album = cursor.getString(2) ?: ""
-                MediaMetadataCompat.Builder()
-                    .putString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID, uri.toString())
-                    .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
-                    .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
-                    .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, album)
-                    .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, 0L)
-                    .build()
+    private fun allAudioUris(): List<Uri> {
+        val ordered = linkedSetOf<Uri>()
+        if (hasAudioPermission()) {
+            val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            runCatching {
+                contentResolver.query(
+                    collection,
+                    arrayOf(MediaStore.Audio.Media._ID),
+                    "${MediaStore.Audio.Media.IS_MUSIC} != 0",
+                    null,
+                    "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
+                )?.use { cursor ->
+                    val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                    while (cursor.moveToNext()) {
+                        ordered.add(ContentUris.withAppendedId(collection, cursor.getLong(idColumn)))
+                    }
+                }
             }
-        } catch (_: SecurityException) {
-            null
         }
+        val imported = getSharedPreferences("mortimer_library", MODE_PRIVATE)
+            .getStringSet("audio", emptySet()).orEmpty()
+            .mapNotNull { row ->
+                val parts = row.split('\t', limit = 2)
+                if (parts.size == 2 && parts[0].isNotBlank()) {
+                    parts[0] to parts[1]
+                } else null
+            }
+            .sortedBy { it.second.lowercase() }
+        imported.forEach { (rawUri, _) ->
+            runCatching { Uri.parse(rawUri) }.getOrNull()?.let(ordered::add)
+        }
+        return ordered.toList()
+    }
+
+    private fun metadataFor(uri: Uri): MediaMetadataCompat? {
+        if (uri.scheme == "content" && uri.authority == "media" && !hasAudioPermission()) return null
+
+        var title = uri.lastPathSegment?.substringAfterLast('/')?.ifBlank { null } ?: "Unknown title"
+        var artist = "Unknown artist"
+        var album = ""
+        var duration = 0L
+
+        // SAF document URIs do not expose MediaStore columns. Try the generic document
+        // name first, then enrich metadata when the URI belongs to MediaStore.
+        runCatching {
+            contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    title = cursor.getString(0)?.takeIf { it.isNotBlank() } ?: title
+                }
+            }
+        }
+        runCatching {
+            contentResolver.query(
+                uri,
+                arrayOf(
+                    MediaStore.Audio.Media.TITLE,
+                    MediaStore.Audio.Media.ARTIST,
+                    MediaStore.Audio.Media.ALBUM,
+                    MediaStore.Audio.Media.DURATION
+                ),
+                null, null, null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    title = cursor.getString(0)?.takeIf { it.isNotBlank() } ?: title
+                    artist = cursor.getString(1)?.takeIf { it.isNotBlank() } ?: artist
+                    album = cursor.getString(2) ?: album
+                    duration = runCatching { cursor.getLong(3).coerceAtLeast(0L) }.getOrDefault(0L)
+                }
+            }
+        }
+        return MediaMetadataCompat.Builder()
+            .putString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID, uri.toString())
+            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
+            .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
+            .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, album)
+            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
+            .build()
     }
 
     private fun hasAudioPermission(): Boolean {
