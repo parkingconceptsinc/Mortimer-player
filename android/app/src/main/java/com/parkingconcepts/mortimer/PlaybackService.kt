@@ -9,7 +9,10 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        val player = ExoPlayer.Builder(this).build()
+        val player = ExoPlayer.Builder(this).build().apply {
+            setAudioAttributes(androidx.media3.common.AudioAttributes.DEFAULT, true)
+            setHandleAudioBecomingNoisy(true)
+        }
         mediaSession = MediaSession.Builder(this, player).build()
     }
 
