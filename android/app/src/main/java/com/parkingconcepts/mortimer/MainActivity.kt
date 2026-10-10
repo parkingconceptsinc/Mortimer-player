@@ -418,18 +418,27 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
         if (uris.isEmpty()) return
         uris.forEach { rememberPermission(context, it) }
         coroutineScope.launch {
-            libraryScanStatus = "Reading media metadata…"
-            val prepared = withContext(Dispatchers.IO) {
-                uris.distinct().map { uri ->
-                    val item = LocalMedia(uri, displayName(context, uri, fallback), mime)
-                    if (category == "audio" || category == "videos") enrichMediaMetadata(context, item) else item
+            libraryScanStatus = "Reading metadata for ${uris.distinct().size} selected file(s)…"
+            try {
+                val prepared = withContext(Dispatchers.IO) {
+                    uris.distinct().mapIndexed { index, uri ->
+                        if (index == 0 || (index + 1) % 5 == 0 || index == uris.distinct().lastIndex) {
+                            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                libraryScanStatus = "Reading metadata: ${index + 1} of ${uris.distinct().size}…"
+                            }
+                        }
+                        val item = LocalMedia(uri, displayName(context, uri, fallback), mime)
+                        if (category == "audio" || category == "videos") enrichMediaMetadata(context, item) else item
+                    }
                 }
+                val existingUris = target.map { it.uri }.toSet()
+                prepared.forEach { addMediaIfMissing(target, it) }
+                saveMedia(context, category, target)
+                val addedCount = prepared.count { it.uri !in existingUris }
+                libraryScanStatus = "Imported $addedCount new file(s); refreshed ${prepared.size - addedCount} existing item(s)."
+            } catch (error: Exception) {
+                libraryScanStatus = "Import failed: ${error.localizedMessage ?: "Check file access and try again."}"
             }
-            val existingUris = target.map { it.uri }.toSet()
-            prepared.forEach { addMediaIfMissing(target, it) }
-            saveMedia(context, category, target)
-            val addedCount = prepared.count { it.uri !in existingUris }
-            libraryScanStatus = "Imported $addedCount new file(s); refreshed ${prepared.size - addedCount} existing item(s)."
         }
     }
 
