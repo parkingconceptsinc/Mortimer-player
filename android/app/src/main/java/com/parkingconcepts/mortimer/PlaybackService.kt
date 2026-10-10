@@ -313,18 +313,19 @@ class PlaybackService : MediaLibraryService() {
         val imported = getSharedPreferences("mortimer_library", MODE_PRIVATE)
             .getStringSet("audio", emptySet()).orEmpty()
             .mapNotNull { row ->
-                val parts = row.split('\t', limit = 2)
-                if (parts.size == 2 && parts[0].isNotBlank()) parts[0] to parts[1] else null
+                val parts = row.split('\t')
+                if (parts.size >= 2 && parts[0].isNotBlank()) parts else null
             }
-            .sortedBy { it.second.lowercase() }
-        imported.forEach { (rawUri, title) ->
-            runCatching { Uri.parse(rawUri) }.getOrNull()?.let { uri ->
+            .sortedBy { it[1].lowercase() }
+        imported.forEach { parts ->
+            runCatching { Uri.parse(parts[0]) }.getOrNull()?.let { uri ->
                 if (uri !in items) {
                     items[uri] = buildAudioItem(
                         uri,
-                        title.ifBlank { "Unknown title" },
-                        "Imported local audio",
-                        ""
+                        parts[1].ifBlank { "Unknown title" },
+                        parts.getOrNull(2)?.ifBlank { "Unknown artist" } ?: "Unknown artist",
+                        parts.getOrNull(3).orEmpty(),
+                        parts.getOrNull(4).orEmpty()
                     )
                 }
             }
