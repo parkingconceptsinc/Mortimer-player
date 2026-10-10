@@ -270,11 +270,10 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
-        librarySession?.run {
-            player.release()
-            release()
-        }
+        // Release the player even if session construction failed partway through.
+        librarySession?.release()
         librarySession = null
+        if (::player.isInitialized) player.release()
         super.onDestroy()
     }
 
