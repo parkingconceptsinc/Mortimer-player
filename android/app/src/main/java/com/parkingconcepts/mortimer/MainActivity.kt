@@ -8,6 +8,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.documentfile.provider.DocumentFile
 import android.media.MediaMetadataRetriever
@@ -563,6 +564,13 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
             Text(section, color = MainText, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold)
             Text("Your media library", color = Muted, fontSize = 14.sp)
             Spacer(Modifier.height(18.dp))
+            BackHandler(enabled = section != "Home" || selectedGroup != null || activePlaylistId != null) {
+                when {
+                    selectedGroup != null -> selectedGroup = null
+                    activePlaylistId != null -> activePlaylistId = null
+                    section != "Home" -> section = "Home"
+                }
+            }
             val navSections = listOf("Home", "Music", "Videos", "Books", "Comics", "Services")
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 items(navSections) { destination ->
