@@ -157,27 +157,70 @@ private data class LocalPlaylist(
 
 private fun safeField(value: String): String = value.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ')
 
+private fun mediaLibraryFile(context: Context, category: String): File =
+    File(context.filesDir, "media_library_${category}.json")
+
+private fun decodeMediaRow(row: String, mime: String): LocalMedia? {
+    val parts = row.split('\t')
+    if (parts.size < 2 || parts[0].isBlank()) return null
+    return runCatching {
+        LocalMedia(
+            uri = Uri.parse(parts[0]),
+            title = parts[1].ifBlank { "Unknown title" },
+            mime = mime,
+            artist = parts.getOrNull(2)?.ifBlank { "Unknown artist" } ?: "Unknown artist",
+            album = parts.getOrNull(3).orEmpty(),
+            genre = parts.getOrNull(4).orEmpty(),
+            year = parts.getOrNull(5)?.toIntOrNull() ?: 0,
+            folder = parts.getOrNull(6).orEmpty(),
+            durationMs = parts.getOrNull(7)?.toLongOrNull() ?: 0L,
+            coverPath = parts.getOrNull(8).orEmpty(),
+            addedAt = parts.getOrNull(9)?.toLongOrNull() ?: System.currentTimeMillis()
+        )
+    }.getOrNull()
+}
+
 private fun loadMedia(context: Context, category: String, mime: String): List<LocalMedia> {
+    val file = mediaLibraryFile(context, category)
+    if (file.isFile) {
+        return runCatching {
+            val array = JSONArray(file.readText(Charsets.UTF_8))
+            (0 until array.length()).mapNotNull { index ->
+                val row = array.optJSONObject(index) ?: return@mapNotNull null
+                val uri = row.optString("uri")
+                if (uri.isBlank()) return@mapNotNull null
+                runCatching {
+                    LocalMedia(
+                        uri = Uri.parse(uri),
+                        title = row.optString("title", "Unknown title").ifBlank { "Unknown title" },
+                        mime = mime,
+                        artist = row.optString("artist", "Unknown artist").ifBlank { "Unknown artist" },
+                        album = row.optString("album"),
+                        genre = row.optString("genre"),
+                        year = row.optInt("year", 0),
+                        folder = row.optString("folder"),
+                        durationMs = row.optLong("durationMs", 0L),
+                        coverPath = row.optString("coverPath"),
+                        addedAt = row.optLong("addedAt", System.currentTimeMillis())
+                    )
+                }.getOrNull()
+            }.sortedBy { it.title.lowercase() }
+        }.getOrElse {
+            // Fall back to the previous store if the new file is damaged.
+            loadLegacyMedia(context, category, mime)
+        }
+    }
+
+    // One-time migration from SharedPreferences keeps existing installations intact.
+    val legacy = loadLegacyMedia(context, category, mime)
+    if (legacy.isNotEmpty()) saveMedia(context, category, legacy)
+    return legacy
+}
+
+private fun loadLegacyMedia(context: Context, category: String, mime: String): List<LocalMedia> {
     val values = context.getSharedPreferences("mortimer_library", Context.MODE_PRIVATE)
         .getStringSet(category, emptySet()).orEmpty()
-    return values.mapNotNull { row ->
-        val parts = row.split('\t')
-        if (parts.size < 2 || parts[0].isBlank()) null else runCatching {
-            LocalMedia(
-                uri = Uri.parse(parts[0]),
-                title = parts[1].ifBlank { "Unknown title" },
-                mime = mime,
-                artist = parts.getOrNull(2)?.ifBlank { "Unknown artist" } ?: "Unknown artist",
-                album = parts.getOrNull(3).orEmpty(),
-                genre = parts.getOrNull(4).orEmpty(),
-                year = parts.getOrNull(5)?.toIntOrNull() ?: 0,
-                folder = parts.getOrNull(6).orEmpty(),
-                durationMs = parts.getOrNull(7)?.toLongOrNull() ?: 0L,
-                coverPath = parts.getOrNull(8).orEmpty(),
-                addedAt = parts.getOrNull(9)?.toLongOrNull() ?: System.currentTimeMillis()
-            )
-        }.getOrNull()
-    }.sortedBy { it.title.lowercase() }
+    return values.mapNotNull { decodeMediaRow(it, mime) }.sortedBy { it.title.lowercase() }
 }
 
 private fun addMediaIfMissing(target: MutableList<LocalMedia>, item: LocalMedia) {
@@ -186,15 +229,32 @@ private fun addMediaIfMissing(target: MutableList<LocalMedia>, item: LocalMedia)
 }
 
 private fun saveMedia(context: Context, category: String, items: List<LocalMedia>) {
-    val rows = items.map { item ->
-        listOf(
-            item.uri.toString(), item.title, item.artist, item.album, item.genre,
-            item.year.toString(), item.folder, item.durationMs.toString(),
-            item.coverPath, item.addedAt.toString()
-        ).joinToString("\t", transform = ::safeField)
-    }.toSet()
-    context.getSharedPreferences("mortimer_library", Context.MODE_PRIVATE)
-        .edit().putStringSet(category, rows).apply()
+    val array = JSONArray()
+    items.distinctBy { it.uri.toString() }.forEach { item ->
+        array.put(JSONObject()
+            .put("uri", item.uri.toString())
+            .put("title", item.title)
+            .put("artist", item.artist)
+            .put("album", item.album)
+            .put("genre", item.genre)
+            .put("year", item.year)
+            .put("folder", item.folder)
+            .put("durationMs", item.durationMs)
+            .put("coverPath", item.coverPath)
+            .put("addedAt", item.addedAt))
+    }
+
+    // AtomicFile prevents a process interruption from leaving a half-written library.
+    val target = android.util.AtomicFile(mediaLibraryFile(context, category))
+    var output: java.io.FileOutputStream? = null
+    try {
+        output = target.startWrite()
+        output.write(array.toString().toByteArray(Charsets.UTF_8))
+        target.finishWrite(output)
+    } catch (error: Exception) {
+        output?.let { target.failWrite(it) }
+        android.util.Log.e("MortimerLibrary", "Could not save $category library", error)
+    }
 }
 
 private fun enrichMediaMetadata(context: Context, item: LocalMedia): LocalMedia {
