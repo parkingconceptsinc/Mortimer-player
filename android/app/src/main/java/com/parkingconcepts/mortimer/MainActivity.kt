@@ -451,35 +451,39 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
             }
             coroutineScope.launch {
                 libraryScanStatus = "Scanning folder and subfolders…"
-                val scanned = withContext(Dispatchers.IO) {
-                    val root = DocumentFile.fromTreeUri(context, treeUri)
-                        ?: throw IllegalStateException("Could not open the selected folder.")
-                    collectFolderMedia(context, root)
-                }
-                val enriched = withContext(Dispatchers.IO) {
-                    scanned.mapIndexed { index, pair ->
-                        if (index > 0 && index % 4 == 0) {
-                            withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                libraryScanStatus = "Reading metadata: $index of ${scanned.size}…"
+                try {
+                    val scanned = withContext(Dispatchers.IO) {
+                        val root = DocumentFile.fromTreeUri(context, treeUri)
+                            ?: throw IllegalStateException("Could not open the selected folder.")
+                        collectFolderMedia(context, root)
+                    }
+                    val enriched = withContext(Dispatchers.IO) {
+                        scanned.mapIndexed { index, pair ->
+                            if (index > 0 && index % 4 == 0) {
+                                withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                    libraryScanStatus = "Reading metadata: $index of ${scanned.size}…"
+                                }
                             }
+                            val (category, item) = pair
+                            category to if (category == "audio" || category == "videos") enrichMediaMetadata(context, item) else item
                         }
-                        val (category, item) = pair
-                        category to if (category == "audio" || category == "videos") enrichMediaMetadata(context, item) else item
                     }
-                }
-                enriched.forEach { (category, item) ->
-                    when (category) {
-                        "audio" -> addMediaIfMissing(audio, item)
-                        "videos" -> addMediaIfMissing(videos, item)
-                        "books" -> addMediaIfMissing(books, item)
-                        "comics" -> addMediaIfMissing(comics, item)
+                    enriched.forEach { (category, item) ->
+                        when (category) {
+                            "audio" -> addMediaIfMissing(audio, item)
+                            "videos" -> addMediaIfMissing(videos, item)
+                            "books" -> addMediaIfMissing(books, item)
+                            "comics" -> addMediaIfMissing(comics, item)
+                        }
                     }
+                    saveMedia(context, "audio", audio)
+                    saveMedia(context, "videos", videos)
+                    saveMedia(context, "books", books)
+                    saveMedia(context, "comics", comics)
+                    libraryScanStatus = "Folder scan complete: ${enriched.size} media file(s) added."
+                } catch (error: Exception) {
+                    libraryScanStatus = "Folder scan failed: ${error.localizedMessage ?: "Check folder access and try again."}"
                 }
-                saveMedia(context, "audio", audio)
-                saveMedia(context, "videos", videos)
-                saveMedia(context, "books", books)
-                saveMedia(context, "comics", comics)
-                libraryScanStatus = "Folder scan complete: ${enriched.size} media file(s) added."
             }
         }
     }
