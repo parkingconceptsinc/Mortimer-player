@@ -116,8 +116,7 @@ class PlaybackService : MediaLibraryService() {
         @OptIn(UnstableApi::class)
         override fun onPlaybackResumption(
             mediaSession: MediaSession,
-            controller: MediaSession.ControllerInfo,
-            isForPlayback: Boolean
+            controller: MediaSession.ControllerInfo
         ): ListenableFuture<MediaItemsWithStartPosition> {
             val library = loadAudioLibrary()
             if (library.isEmpty()) {
@@ -131,12 +130,10 @@ class PlaybackService : MediaLibraryService() {
             val selectedIndex = library.indexOfFirst { it.mediaId == lastPlayedUri }
                 .takeIf { it >= 0 } ?: 0
 
-            // The system can request metadata only after reboot. Return one item in
-            // that case; return the complete queue when playback should actually resume.
-            val items = if (isForPlayback) library else listOf(library[selectedIndex])
-            val startIndex = if (isForPlayback) selectedIndex else 0
+            // Media3 1.6.1 uses the two-argument callback, so return the queue
+            // and its saved starting track in one response.
             return Futures.immediateFuture(
-                MediaItemsWithStartPosition(items, startIndex, C.TIME_UNSET)
+                MediaItemsWithStartPosition(library, selectedIndex, C.TIME_UNSET)
             )
         }
 
