@@ -571,34 +571,200 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                     HomeCard("♫", "Music services", "Spotify and compatible services", "Connect") { section = "Services" }
                 }
                 "Music" -> {
-                    Button(onClick = { audioPicker.launch(arrayOf("audio/*")) }, colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF111114))) { Text("＋ Add music") }
-                    if (audio.isEmpty()) EmptyMessage("Select audio files from your phone, an SD card, or a USB drive.")
-                    LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        items(audio) { item ->
-                            MediaRow(item.title, "Local audio") {
-                                currentTitle = item.title
-                                currentVideoUri = null
-                                val selectedIndex = audio.indexOf(item).coerceAtLeast(0)
-                                player.setMediaItems(
-                                    audio.map { track ->
-                                        MediaItem.Builder()
-                                            .setMediaId(track.uri.toString())
-                                            .setUri(track.uri)
-                                            .setMediaMetadata(
-                                                MediaMetadata.Builder()
-                                                    .setTitle(track.title)
-                                                    .setArtist("Local audio")
-                                                    .setIsBrowsable(false)
-                                                    .setIsPlayable(true)
+                    val viewOptions = listOf("Songs", "Artists", "Albums", "Folders", "Favorites", "Recent", "Top played", "Playlists")
+                    val artists = audio.groupBy { it.artist.ifBlank { "Unknown artist" } }.toSortedMap(String.CASE_INSENSITIVE_ORDER)
+                    val albums = audio.groupBy { "${it.album.ifBlank { "Unknown album" }} — ${it.artist.ifBlank { "Unknown artist" }}" }
+                        .toSortedMap(String.CASE_INSENSITIVE_ORDER)
+                    val folders = audio.groupBy {
+                        it.folder.ifBlank { it.uri.pathSegments.dropLast(1).takeLast(2).joinToString("/").ifBlank { "Imported files" } }
+                    }.toSortedMap(String.CASE_INSENSITIVE_ORDER)
+                    val sourceTracks = when (musicView) {
+                        "Favorites" -> audio.filter { it.uri.toString() in favorites }
+                        "Recent" -> recentTracks.mapNotNull { uri -> audio.firstOrNull { it.uri.toString() == uri } }
+                        "Top played" -> audio.sortedWith(compareByDescending<LocalMedia> { playCounts[it.uri.toString()] ?: 0 }.thenBy { it.title.lowercase() })
+                        "Artists" -> selectedGroup?.let { group -> audio.filter { it.artist.ifBlank { "Unknown artist" } == group } }.orEmpty()
+                        "Albums" -> selectedGroup?.let { group -> albums[group].orEmpty() }.orEmpty()
+                        "Folders" -> selectedGroup?.let { group -> folders[group].orEmpty() }.orEmpty()
+                        "Playlists" -> activePlaylistId?.let { id -> playlists.firstOrNull { it.id == id }?.uris }
+                            ?.mapNotNull { uri -> audio.firstOrNull { it.uri.toString() == uri } }.orEmpty()
+                        else -> audio.toList()
+                    }
+                    val query = musicSearch.trim().lowercase()
+                    val matchingTracks = sourceTracks.filter { track ->
+                        query.isBlank() || listOf(track.title, track.artist, track.album, track.genre, track.folder, track.uri.toString())
+                            .any { it.lowercase().contains(query) }
+                    }
+                    val displayedTracks = when {
+                        musicView == "Recent" && selectedGroup == null -> matchingTracks
+                        musicView == "Top played" && selectedGroup == null -> matchingTracks
+                        else -> when (sortMode) {
+                            "Artist" -> matchingTracks.sortedWith(compareBy<LocalMedia> { it.artist.lowercase() }.thenBy { it.title.lowercase() })
+                            "Album" -> matchingTracks.sortedWith(compareBy<LocalMedia> { it.album.lowercase() }.thenBy { it.title.lowercase() })
+                            "Added" -> matchingTracks.sortedByDescending { it.addedAt }
+                            "Duration" -> matchingTracks.sortedByDescending { it.durationMs }
+                            "Plays" -> matchingTracks.sortedByDescending { playCounts[it.uri.toString()] ?: 0 }
+                            else -> matchingTracks.sortedBy { it.title.lowercase() }
+                        }
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { audioPicker.launch(arrayOf("audio/*")) }, colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF111114))) { Text("＋ Add files") }
+                        OutlinedButton(onClick = { folderPicker.launch(null) }) { Text("Import folder") }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = musicSearch,
+                        onValueChange = { musicSearch = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("Search songs, artists, albums…") }
+                    )
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                        items(viewOptions) { view ->
+                            NavChip(view, musicView == view) {
+                                musicView = view
+                                selectedGroup = null
+                                activePlaylistId = null
+                                musicSearch = ""
+                            }
+                        }
+                    }
+                    if (libraryScanStatus != null) {
+                        Text(libraryScanStatus.orEmpty(), color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 6.dp))
+                    }
+
+                    when {
+                        musicView == "Artists" && selectedGroup == null -> {
+                            LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                val groups = artists.filterKeys { query.isBlank() || it.lowercase().contains(query) }.toList()
+                                items(groups, key = { it.first }) { (name, tracks) ->
+                                    MediaRow(name, "${tracks.size} songs · ${tracks.map { it.album }.distinct().size} albums") { selectedGroup = name }
+                                }
+                            }
+                        }
+                        musicView == "Albums" && selectedGroup == null -> {
+                            LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                val groups = albums.filterKeys { query.isBlank() || it.lowercase().contains(query) }.toList()
+                                items(groups, key = { it.first }) { (name, tracks) ->
+                                    MediaRow(name, "${tracks.size} songs") { selectedGroup = name }
+                                }
+                            }
+                        }
+                        musicView == "Folders" && selectedGroup == null -> {
+                            LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                val groups = folders.filterKeys { query.isBlank() || it.lowercase().contains(query) }.toList()
+                                items(groups, key = { it.first }) { (name, tracks) ->
+                                    MediaRow(name, "${tracks.size} songs") { selectedGroup = name }
+                                }
+                            }
+                        }
+                        musicView == "Playlists" && activePlaylistId == null -> {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Button(onClick = { draftPlaylistName = ""; showCreatePlaylist = true }) { Text("＋ New playlist") }
+                                Text("${playlists.size} playlists", color = Muted, fontSize = 12.sp)
+                            }
+                            LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                items(playlists, key = { it.id }) { playlist ->
+                                    MediaRow(playlist.name, "${playlist.uris.size} tracks") {
+                                        activePlaylistId = playlist.id
+                                        selectedGroup = null
+                                    }
+                                }
+                            }
+                        }
+                        else -> {
+                            if (selectedGroup != null) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(selectedGroup.orEmpty(), color = Accent, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                    Text("All ${musicView.lowercase()}", color = Muted, fontSize = 12.sp,
+                                        modifier = Modifier.clickable { selectedGroup = null }.padding(8.dp))
+                                }
+                            }
+                            if (musicView == "Playlists" && activePlaylistId != null) {
+                                val active = playlists.firstOrNull { it.id == activePlaylistId }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(active?.name ?: "Playlist", color = MainText, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                    Text("Back", color = Accent, modifier = Modifier.clickable { activePlaylistId = null }.padding(8.dp))
+                                }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.fillMaxWidth()) {
+                                listOf("Title", "Artist", "Album", "Added", "Duration", "Plays").forEach { sort ->
+                                    NavChip(sort, sortMode == sort) { sortMode = sort }
+                                }
+                            }
+                            Text("${displayedTracks.size} tracks", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(vertical = 4.dp))
+                            if (displayedTracks.isEmpty()) {
+                                EmptyMessage(if (audio.isEmpty()) "Your library is empty. Add files or import a folder." else "No tracks match this view.")
+                            }
+                            LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                items(displayedTracks, key = { it.uri.toString() }) { item ->
+                                    var playlistMenuExpanded by remember(item.uri) { mutableStateOf(false) }
+                                    val isFavorite = item.uri.toString() in favorites
+                                    MediaRow(
+                                        item.title,
+                                        listOf(item.artist, item.album, formatMediaDuration(item.durationMs)).filter(String::isNotBlank).joinToString(" · "),
+                                        trailing = {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Text(if (isFavorite) "♥" else "♡", color = if (isFavorite) Accent else Muted,
+                                                    modifier = Modifier.clickable {
+                                                        if (isFavorite) favorites.remove(item.uri.toString()) else favorites.add(item.uri.toString())
+                                                        preferences.edit().putStringSet("favorites", favorites.toSet()).apply()
+                                                    }.padding(4.dp))
+                                                if (musicView == "Playlists" && activePlaylistId != null) {
+                                                    Text("Remove", color = Muted, fontSize = 11.sp, modifier = Modifier.clickable {
+                                                        val id = activePlaylistId
+                                                        playlists = playlists.map { playlist ->
+                                                            if (playlist.id == id) playlist.copy(uris = playlist.uris.filterNot { it == item.uri.toString() }) else playlist
+                                                        }
+                                                        savePlaylists(context, playlists)
+                                                    }.padding(4.dp))
+                                                } else if (playlists.isNotEmpty()) {
+                                                    Box {
+                                                        Text("＋", color = Accent, modifier = Modifier.clickable { playlistMenuExpanded = true }.padding(4.dp))
+                                                        DropdownMenu(expanded = playlistMenuExpanded, onDismissRequest = { playlistMenuExpanded = false }) {
+                                                            playlists.forEach { playlist ->
+                                                                DropdownMenuItem(text = { Text(playlist.name) }, onClick = {
+                                                                    playlists = playlists.map { old ->
+                                                                        if (old.id == playlist.id && item.uri.toString() !in old.uris) old.copy(uris = old.uris + item.uri.toString()) else old
+                                                                    }
+                                                                    savePlaylists(context, playlists)
+                                                                    playlistMenuExpanded = false
+                                                                    libraryScanStatus = "Added to ${playlist.name}."
+                                                                })
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    ) {
+                                        currentTitle = item.title
+                                        currentVideoUri = null
+                                        val selectedIndex = displayedTracks.indexOf(item).coerceAtLeast(0)
+                                        player.setMediaItems(
+                                            displayedTracks.map { track ->
+                                                MediaItem.Builder()
+                                                    .setMediaId(track.uri.toString())
+                                                    .setUri(track.uri)
+                                                    .setMediaMetadata(
+                                                        MediaMetadata.Builder()
+                                                            .setTitle(track.title)
+                                                            .setArtist(track.artist)
+                                                            .setAlbumTitle(track.album)
+                                                            .setGenre(track.genre)
+                                                            .setIsBrowsable(false)
+                                                            .setIsPlayable(true)
+                                                            .build()
+                                                    )
                                                     .build()
-                                            )
-                                            .build()
-                                    },
-                                    selectedIndex,
-                                    0L
-                                )
-                                player.prepare()
-                                player.play()
+                                            },
+                                            selectedIndex,
+                                            0L
+                                        )
+                                        player.prepare()
+                                        player.play()
+                                    }
+                                }
                             }
                         }
                     }
