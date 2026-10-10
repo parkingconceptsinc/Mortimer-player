@@ -27,6 +27,13 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -561,7 +568,17 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                 NavChip("Services", section == "Services") { section = "Services" }
             }
             Spacer(Modifier.height(14.dp))
-            when (section) {
+            AnimatedContent(
+                targetState = section,
+                transitionSpec = {
+                    (fadeIn(animationSpec = tween(220)) +
+                        slideInHorizontally(animationSpec = tween(220)) { fullWidth -> fullWidth / 10 }) togetherWith
+                        (fadeOut(animationSpec = tween(150)) +
+                            slideOutHorizontally(animationSpec = tween(150)) { fullWidth -> -fullWidth / 12 })
+                },
+                label = "section-transition"
+            ) { targetSection ->
+                when (targetSection) {
                 "Home" -> {
                     Text("YOUR LIBRARY", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
                     Spacer(Modifier.height(8.dp))
@@ -892,6 +909,7 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                         TextButton(onClick = { showCreatePlaylist = false }) { Text("Cancel") }
                     }
                 )
+            }
             }
             if (section == "Home" || section == "Services") Spacer(Modifier.weight(1f))
             Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
