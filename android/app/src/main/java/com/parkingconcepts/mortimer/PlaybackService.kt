@@ -365,7 +365,13 @@ class PlaybackService : MediaLibraryService() {
         return library.firstOrNull { it.mediaId == lastPlayedUri }
     }
 
-    private fun buildAudioItem(uri: Uri, title: String, artist: String, album: String): MediaItem =
+    private fun buildAudioItem(
+        uri: Uri,
+        title: String,
+        artist: String,
+        album: String,
+        genre: String = ""
+    ): MediaItem =
         MediaItem.Builder()
             .setMediaId(uri.toString())
             .setUri(uri)
@@ -374,6 +380,7 @@ class PlaybackService : MediaLibraryService() {
                     .setTitle(title)
                     .setArtist(artist)
                     .setAlbumTitle(album)
+                    .setGenre(genre)
                     .setIsBrowsable(false)
                     .setIsPlayable(true)
                     .build()
