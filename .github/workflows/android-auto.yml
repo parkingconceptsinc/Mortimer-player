@@ -27,6 +27,17 @@ jobs:
       - name: Test, lint, and assemble Android Auto companion
         working-directory: android
         run: gradle testDebugUnitTest lintDebug assembleDebug
+      - name: Print Android lint findings
+        if: always()
+        shell: bash
+        run: |
+          report="android/app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt"
+          if [[ -f "$report" ]]; then
+            cat "$report"
+          else
+            echo "No Android lint text report was generated."
+          fi
+
       - name: Upload Android lint report
         if: always()
         uses: actions/upload-artifact@v4
