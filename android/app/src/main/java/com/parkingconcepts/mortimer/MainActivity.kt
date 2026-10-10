@@ -571,7 +571,7 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                     section != "Home" -> section = "Home"
                 }
             }
-            val navSections = listOf("Home", "Music", "Videos", "Books", "Comics", "Services")
+            val navSections = listOf("Home", "Music", "Videos", "Books", "Comics", "Now Playing", "Queue", "Services")
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 items(navSections) { destination ->
                     NavChip(destination, section == destination) {
@@ -806,6 +806,45 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                                         player.prepare()
                                         player.play()
                                     }
+                                }
+                            }
+                        }
+                    }
+                }
+                "Now Playing" -> {
+                    Text("NOW PLAYING", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                    Spacer(Modifier.height(10.dp))
+                    Text(currentTitle, color = MainText, fontSize = 24.sp, fontWeight = FontWeight.Bold,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(if (isPlaying) "Playing" else if (player.currentMediaItem != null) "Paused" else "Nothing is playing",
+                        color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Button(onClick = { if (player.hasPreviousMediaItem()) player.seekToPreviousMediaItem() },
+                            enabled = player.hasPreviousMediaItem()) { Text("Previous") }
+                        Button(onClick = { if (isPlaying) player.pause() else player.play() },
+                            enabled = player.currentMediaItem != null,
+                            colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF111114))) {
+                            Text(if (isPlaying) "Pause" else "Play")
+                        }
+                        Button(onClick = { if (player.hasNextMediaItem()) player.seekToNextMediaItem() },
+                            enabled = player.hasNextMediaItem()) { Text("Next") }
+                    }
+                }
+                "Queue" -> {
+                    Text("${player.mediaItemCount} items in the playback queue", color = Muted, fontSize = 12.sp,
+                        modifier = Modifier.padding(bottom = 8.dp))
+                    if (player.mediaItemCount == 0) {
+                        EmptyMessage("Your queue is empty. Start playing a file from Music or Videos.")
+                    } else {
+                        LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            items((0 until player.mediaItemCount).toList(), key = { index -> "${index}:${player.getMediaItemAt(index).mediaId}" }) { index ->
+                                val item = player.getMediaItemAt(index)
+                                val title = item.mediaMetadata.title?.toString()?.takeIf { it.isNotBlank() } ?: "Untitled media"
+                                MediaRow(title, if (index == player.currentMediaItemIndex) "Currently playing" else "Queue position ${index + 1}") {
+                                    player.seekTo(index, 0L)
+                                    player.prepare()
+                                    player.play()
                                 }
                             }
                         }
