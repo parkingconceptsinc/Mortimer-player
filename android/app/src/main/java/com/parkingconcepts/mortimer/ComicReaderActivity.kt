@@ -45,12 +45,13 @@ class ComicReaderActivity : Activity() {
 
             val root = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(16, 16, 16, 16)
+                setPadding(dp(12), dp(12), dp(12), dp(12))
                 setBackgroundColor(android.graphics.Color.rgb(7, 7, 10))
             }
             val heading = TextView(this).apply {
                 text = title
                 textSize = 18f
+                maxLines = 2
                 setTextColor(android.graphics.Color.WHITE)
                 gravity = Gravity.CENTER
             }
@@ -58,7 +59,7 @@ class ComicReaderActivity : Activity() {
                 textSize = 13f
                 setTextColor(android.graphics.Color.LTGRAY)
                 gravity = Gravity.CENTER
-                setPadding(0, 8, 0, 8)
+                setPadding(0, dp(6), 0, dp(6))
             }
             image = ImageView(this).apply {
                 adjustViewBounds = true
@@ -69,10 +70,22 @@ class ComicReaderActivity : Activity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER
             }
-            previousPage = Button(this).apply { text = "← Previous"; setOnClickListener { showPage(pageIndex - 1) } }
-            nextPage = Button(this).apply { text = "Next →"; setOnClickListener { showPage(pageIndex + 1) } }
-            controls.addView(previousPage)
-            controls.addView(nextPage)
+            previousPage = Button(this).apply {
+                text = "← Previous"
+                textSize = 12f
+                minWidth = 0
+                setPadding(dp(4), dp(4), dp(4), dp(4))
+                setOnClickListener { showPage(pageIndex - 1) }
+            }
+            nextPage = Button(this).apply {
+                text = "Next →"
+                textSize = 12f
+                minWidth = 0
+                setPadding(dp(4), dp(4), dp(4), dp(4))
+                setOnClickListener { showPage(pageIndex + 1) }
+            }
+            controls.addView(previousPage, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            controls.addView(nextPage, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             root.addView(heading)
             root.addView(status)
             root.addView(image)
@@ -130,6 +143,8 @@ class ComicReaderActivity : Activity() {
         archive?.delete()
         super.onDestroy()
     }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private fun readingProgressKey(uri: Uri): String = "comic_${uri.toString().hashCode()}"
 

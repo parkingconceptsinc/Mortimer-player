@@ -46,14 +46,16 @@ class PdfReaderActivity : Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.rgb(7, 7, 10))
-            setPadding(12, 8, 12, 8)
+            setPadding(dp(12), dp(8), dp(12), dp(8))
         }
         val header = TextView(this).apply {
             text = intent.getStringExtra(EXTRA_TITLE) ?: "PDF Reader"
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
             setTextColor(Color.WHITE)
             textSize = 18f
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(4, 8, 4, 12)
+            setPadding(dp(4), dp(8), dp(4), dp(12))
         }
         root.addView(header, LinearLayout.LayoutParams(-1, -2))
         pageImage = ImageView(this).apply {
@@ -70,20 +72,27 @@ class PdfReaderActivity : Activity() {
         }
         previous = Button(this).apply {
             text = "Previous"
+            textSize = 12f
+            minWidth = 0
+            setPadding(dp(4), dp(4), dp(4), dp(4))
             setOnClickListener { showPage(pageIndex - 1) }
         }
         pageLabel = TextView(this).apply {
             setTextColor(Color.WHITE)
-            textSize = 14f
+            textSize = 13f
+            maxLines = 1
             gravity = Gravity.CENTER
         }
         next = Button(this).apply {
             text = "Next"
+            textSize = 12f
+            minWidth = 0
+            setPadding(dp(4), dp(4), dp(4), dp(4))
             setOnClickListener { showPage(pageIndex + 1) }
         }
-        controls.addView(previous)
-        controls.addView(pageLabel, LinearLayout.LayoutParams(0, -2, 1f))
-        controls.addView(next)
+        controls.addView(previous, LinearLayout.LayoutParams(0, -2, 1f))
+        controls.addView(pageLabel, LinearLayout.LayoutParams(0, -2, 0.8f))
+        controls.addView(next, LinearLayout.LayoutParams(0, -2, 1f))
         root.addView(controls, LinearLayout.LayoutParams(-1, -2))
         setContentView(root)
         val progressKey = readingProgressKey(uri, "pdf")
@@ -95,7 +104,7 @@ class PdfReaderActivity : Activity() {
         if (index !in 0 until pdf.pageCount) return
         try {
             val page = pdf.openPage(index)
-            val screenWidth = (resources.displayMetrics.widthPixels - 32).coerceAtLeast(320)
+            val screenWidth = (resources.displayMetrics.widthPixels - dp(24 * 2 + 8)).coerceAtLeast(dp(240))
             val fitScale = screenWidth.toDouble() / page.width.coerceAtLeast(1)
             var renderWidth = screenWidth
             var renderHeight = (page.height.toDouble() * fitScale)
@@ -137,7 +146,7 @@ class PdfReaderActivity : Activity() {
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.rgb(7, 7, 10))
             gravity = Gravity.CENTER
-            setPadding(24, 24, 24, 24)
+            setPadding(dp(24), dp(24), dp(24), dp(24))
         })
     }
 
@@ -146,6 +155,8 @@ class PdfReaderActivity : Activity() {
         descriptor?.close()
         super.onDestroy()
     }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     companion object {
         const val EXTRA_TITLE = "pdf_title"

@@ -79,23 +79,35 @@ class EpubReaderActivity : Activity() {
     private fun buildLayout() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(18, 18, 18, 18)
+            setPadding(dp(16), dp(12), dp(16), dp(12))
             setBackgroundColor(Color.rgb(7, 7, 10))
         }
         heading = TextView(this).apply {
-            textSize = 18f; setTextColor(Color.rgb(255, 120, 73)); gravity = Gravity.CENTER
+            textSize = 18f; maxLines = 2; setTextColor(Color.rgb(255, 120, 73)); gravity = Gravity.CENTER
         }
         scroll = ScrollView(this)
         body = TextView(this).apply {
-            textSize = 18f; setTextColor(Color.rgb(240, 240, 244)); setLineSpacing(8f, 1f)
-            setPadding(0, 18, 0, 18)
+            textSize = 18f; setTextColor(Color.rgb(240, 240, 244)); setLineSpacing(dp(4).toFloat(), 1f)
+            setPadding(0, dp(18), 0, dp(18))
         }
         scroll.addView(body)
         val controls = LinearLayout(this).apply { gravity = Gravity.CENTER }
-        previousChapter = Button(this).apply { text = "← Previous chapter"; setOnClickListener { showChapter(chapterIndex - 1) } }
-        nextChapter = Button(this).apply { text = "Next →"; setOnClickListener { showChapter(chapterIndex + 1) } }
-        controls.addView(previousChapter)
-        controls.addView(nextChapter)
+        previousChapter = Button(this).apply {
+            text = "← Previous"
+            textSize = 12f
+            minWidth = 0
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            setOnClickListener { showChapter(chapterIndex - 1) }
+        }
+        nextChapter = Button(this).apply {
+            text = "Next →"
+            textSize = 12f
+            minWidth = 0
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            setOnClickListener { showChapter(chapterIndex + 1) }
+        }
+        controls.addView(previousChapter, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        controls.addView(nextChapter, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         root.addView(heading)
         root.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         root.addView(controls)
@@ -133,6 +145,8 @@ class EpubReaderActivity : Activity() {
             nextChapter.isEnabled = chapterIndex < chapters.lastIndex
         }
     }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private fun readingProgressKey(uri: Uri): String = "epub_${uri.toString().hashCode()}"
 
