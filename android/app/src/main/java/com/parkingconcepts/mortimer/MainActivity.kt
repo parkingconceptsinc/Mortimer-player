@@ -11,6 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.documentfile.provider.DocumentFile
 import android.media.MediaMetadataRetriever
+import android.media.AudioManager
 import java.io.File
 import org.json.JSONArray
 import org.json.JSONObject
@@ -366,39 +367,110 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
     val videos = remember { mutableStateListOf<LocalMedia>().apply { addAll(loadMedia(context, "videos", "video/*")) } }
     val books = remember { mutableStateListOf<LocalMedia>().apply { addAll(loadMedia(context, "books", "*/*")) } }
     val comics = remember { mutableStateListOf<LocalMedia>().apply { addAll(loadMedia(context, "comics", "*/*")) } }
+    val preferences = remember { context.getSharedPreferences("mortimer_library", Context.MODE_PRIVATE) }
     var section by remember { mutableStateOf("Home") }
     var currentTitle by remember { mutableStateOf(player.currentMediaItem?.mediaMetadata?.title?.toString() ?: "Nothing is playing") }
     var currentVideoUri by remember { mutableStateOf<Uri?>(null) }
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
     var playbackError by remember { mutableStateOf<String?>(null) }
+    var musicView by remember { mutableStateOf("Songs") }
+    var musicSearch by remember { mutableStateOf("") }
+    var selectedGroup by remember { mutableStateOf<String?>(null) }
+    var sortMode by remember { mutableStateOf("Title") }
+    var activePlaylistId by remember { mutableStateOf<String?>(null) }
+    val favorites = remember { mutableStateListOf<String>().apply { addAll(preferences.getStringSet("favorites", emptySet()).orEmpty()) } }
+    val recentTracks = remember { mutableStateListOf<String>().apply { addAll(loadStringList(context, "recent_tracks")) } }
+    val playCounts = remember { mutableStateMapOf<String, Int>().apply { putAll(loadPlayCounts(context)) } }
+    var playlists by remember { mutableStateOf(loadPlaylists(context)) }
+    var showCreatePlaylist by remember { mutableStateOf(false) }
+    var draftPlaylistName by remember { mutableStateOf("") }
+    var libraryScanStatus by remember { mutableStateOf<String?>(null) }
+    var currentPositionMs by remember { mutableStateOf(0L) }
+    var durationMs by remember { mutableStateOf(0L) }
+    var seeking by remember { mutableStateOf(false) }
+    var seekDraft by remember { mutableStateOf(0f) }
+    var speed by remember { mutableStateOf(preferences.getFloat("playback_speed", 1f)) }
+    var shuffleEnabled by remember { mutableStateOf(player.shuffleModeEnabled) }
+    var repeatMode by remember { mutableStateOf(player.repeatMode) }
+    var sleepDeadline by remember { mutableStateOf(preferences.getLong("sleep_deadline", 0L)) }
+    var sleepEndOfTrack by remember { mutableStateOf(preferences.getBoolean("sleep_end_of_track", false)) }
+    var sleepMinutesRemaining by remember { mutableStateOf(0L) }
+    val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+    var deviceVolume by remember {
+        mutableStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() /
+            audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1))
+    }
+    var savedVolume by remember { mutableStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)) }
+    val coroutineScope = rememberCoroutineScope()
+
+    fun importSelectedFiles(uris: List<Uri>, category: String, target: MutableList<LocalMedia>, mime: String, fallback: String) {
+        if (uris.isEmpty()) return
+        uris.forEach { rememberPermission(context, it) }
+        coroutineScope.launch {
+            libraryScanStatus = "Reading media metadata…"
+            val prepared = withContext(Dispatchers.IO) {
+                uris.map { uri ->
+                    val item = LocalMedia(uri, displayName(context, uri, fallback), mime)
+                    if (category == "audio" || category == "videos") enrichMediaMetadata(context, item) else item
+                }
+            }
+            prepared.forEach { addMediaIfMissing(target, it) }
+            saveMedia(context, category, target)
+            libraryScanStatus = "Imported ${prepared.size} file(s)."
+        }
+    }
 
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        uris.forEach { uri ->
-            rememberPermission(context, uri)
-            addMediaIfMissing(audio, LocalMedia(uri, displayName(context, uri, "Audio file"), "audio/*"))
-        }
-        saveMedia(context, "audio", audio)
+        importSelectedFiles(uris, "audio", audio, "audio/*", "Audio file")
     }
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        uris.forEach { uri ->
-            rememberPermission(context, uri)
-            addMediaIfMissing(videos, LocalMedia(uri, displayName(context, uri, "Video"), "video/*"))
-        }
-        saveMedia(context, "videos", videos)
+        importSelectedFiles(uris, "videos", videos, "video/*", "Video")
     }
     val bookPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        uris.forEach { uri ->
-            rememberPermission(context, uri)
-            addMediaIfMissing(books, LocalMedia(uri, displayName(context, uri, "Book"), "*/*"))
-        }
-        saveMedia(context, "books", books)
+        importSelectedFiles(uris, "books", books, "*/*", "Book")
     }
     val comicPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        uris.forEach { uri ->
-            rememberPermission(context, uri)
-            addMediaIfMissing(comics, LocalMedia(uri, displayName(context, uri, "Comic"), "*/*"))
+        importSelectedFiles(uris, "comics", comics, "*/*", "Comic")
+    }
+
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { treeUri ->
+        if (treeUri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            coroutineScope.launch {
+                libraryScanStatus = "Scanning folder and subfolders…"
+                val scanned = withContext(Dispatchers.IO) {
+                    val root = DocumentFile.fromTreeUri(context, treeUri)
+                        ?: throw IllegalStateException("Could not open the selected folder.")
+                    collectFolderMedia(context, root)
+                }
+                val enriched = withContext(Dispatchers.IO) {
+                    scanned.mapIndexed { index, pair ->
+                        if (index > 0 && index % 4 == 0) {
+                            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                libraryScanStatus = "Reading metadata: $index of ${scanned.size}…"
+                            }
+                        }
+                        val (category, item) = pair
+                        category to if (category == "audio" || category == "videos") enrichMediaMetadata(context, item) else item
+                    }
+                }
+                enriched.forEach { (category, item) ->
+                    when (category) {
+                        "audio" -> addMediaIfMissing(audio, item)
+                        "videos" -> addMediaIfMissing(videos, item)
+                        "books" -> addMediaIfMissing(books, item)
+                        "comics" -> addMediaIfMissing(comics, item)
+                    }
+                }
+                saveMedia(context, "audio", audio)
+                saveMedia(context, "videos", videos)
+                saveMedia(context, "books", books)
+                saveMedia(context, "comics", comics)
+                libraryScanStatus = "Folder scan complete: ${enriched.size} media file(s) added."
+            }
         }
-        saveMedia(context, "comics", comics)
     }
 
     DisposableEffect(player) {
