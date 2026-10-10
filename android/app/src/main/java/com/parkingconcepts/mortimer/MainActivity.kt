@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackException
 import androidx.media3.session.MediaController
@@ -473,6 +474,31 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
         }
     }
 
+    val latestSleepEndOfTrack by rememberUpdatedState(sleepEndOfTrack)
+    val latestSleepDeadline by rememberUpdatedState(sleepDeadline)
+
+    LaunchedEffect(player) {
+        player.shuffleModeEnabled = preferences.getBoolean("shuffle_enabled", false)
+        player.repeatMode = preferences.getInt("repeat_mode", Player.REPEAT_MODE_OFF)
+        player.setPlaybackParameters(PlaybackParameters(speed.coerceIn(0.5f, 3f)))
+        while (true) {
+            if (!seeking) currentPositionMs = player.currentPosition.coerceAtLeast(0L)
+            durationMs = player.duration.takeIf { it > 0L } ?: 0L
+            isPlaying = player.isPlaying
+            shuffleEnabled = player.shuffleModeEnabled
+            repeatMode = player.repeatMode
+            sleepMinutesRemaining = if (latestSleepDeadline > 0L) {
+                ((latestSleepDeadline - System.currentTimeMillis()).coerceAtLeast(0L) / 60_000L)
+            } else 0L
+            if (latestSleepDeadline > 0L && System.currentTimeMillis() >= latestSleepDeadline) {
+                player.pause()
+                sleepDeadline = 0L
+                preferences.edit().putLong("sleep_deadline", 0L).apply()
+            }
+            delay(400)
+        }
+    }
+
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
@@ -490,11 +516,30 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 playbackError = null
                 val uri = mediaItem?.localConfiguration?.uri
+                val uriString = uri?.toString()
                 currentVideoUri = videos.firstOrNull { it.uri == uri }?.uri
                 currentTitle = audio.firstOrNull { it.uri == uri }?.title
                     ?: videos.firstOrNull { it.uri == uri }?.title
                     ?: mediaItem?.mediaMetadata?.title?.toString()?.takeIf { it.isNotBlank() }
                     ?: "Nothing is playing"
+
+                if (uriString != null && (audio.any { it.uri == uri } || videos.any { it.uri == uri })) {
+                    recentTracks.remove(uriString)
+                    recentTracks.add(0, uriString)
+                    while (recentTracks.size > MAX_RECENT_TRACKS) recentTracks.removeAt(recentTracks.lastIndex)
+                    saveStringList(context, "recent_tracks", recentTracks.toList())
+                    playCounts[uriString] = (playCounts[uriString] ?: 0) + 1
+                    savePlayCounts(context, playCounts.toMap())
+                    preferences.edit().putString("last_played_uri", uriString).apply()
+                }
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_ENDED && latestSleepEndOfTrack) {
+                    player.pause()
+                    sleepEndOfTrack = false
+                    preferences.edit().putBoolean("sleep_end_of_track", false).apply()
+                }
             }
         }
         player.addListener(listener)
