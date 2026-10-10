@@ -313,7 +313,7 @@ private fun collectFolderMedia(context: Context, root: DocumentFile): List<Pair<
 
 private fun mimeForExtension(extension: String): String = when (extension) {
     "mp3" -> "audio/mpeg"
-    "m4a", "mp4" -> "audio/mp4"
+    "m4a", "m4b" -> "audio/mp4"
     "flac" -> "audio/flac"
     "wav" -> "audio/wav"
     "ogg", "oga" -> "audio/ogg"
