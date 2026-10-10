@@ -470,7 +470,14 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                             category to if (category == "audio" || category == "videos") enrichMediaMetadata(context, item) else item
                         }
                     }
-                    enriched.forEach { (category, item) ->
+                    val existingUris = mapOf(
+                        "audio" to audio.map { it.uri }.toSet(),
+                        "videos" to videos.map { it.uri }.toSet(),
+                        "books" to books.map { it.uri }.toSet(),
+                        "comics" to comics.map { it.uri }.toSet()
+                    )
+                    val uniqueEnriched = enriched.distinctBy { (category, item) -> "$category:${item.uri}" }
+                    uniqueEnriched.forEach { (category, item) ->
                         when (category) {
                             "audio" -> addMediaIfMissing(audio, item)
                             "videos" -> addMediaIfMissing(videos, item)
@@ -482,7 +489,8 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                     saveMedia(context, "videos", videos)
                     saveMedia(context, "books", books)
                     saveMedia(context, "comics", comics)
-                    libraryScanStatus = "Folder scan complete: ${enriched.size} media file(s) added."
+                    val addedCount = uniqueEnriched.count { (category, item) -> item.uri !in (existingUris[category] ?: emptySet()) }
+                    libraryScanStatus = "Folder scan complete: $addedCount new file(s); refreshed ${uniqueEnriched.size - addedCount} existing item(s)."
                 } catch (error: Exception) {
                     libraryScanStatus = "Folder scan failed: ${error.localizedMessage ?: "Check folder access and try again."}"
                 }
