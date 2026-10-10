@@ -208,8 +208,7 @@ class CarMediaService : MediaBrowserServiceCompat() {
     }
 
     private fun metadataFor(uri: Uri): MediaMetadataCompat? {
-        if (uri.scheme == "content" && !hasAudioPermission() &&
-            uri.authority?.contains("media", ignoreCase = true) == true) return null
+        if (uri.scheme == "content" && uri.authority == "media" && !hasAudioPermission()) return null
 
         var title = uri.lastPathSegment?.substringAfterLast('/')?.ifBlank { null } ?: "Unknown title"
         var artist = "Unknown artist"
