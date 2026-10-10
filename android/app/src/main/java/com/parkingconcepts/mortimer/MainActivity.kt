@@ -217,6 +217,7 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 playbackError = null
                 val uri = mediaItem?.localConfiguration?.uri
+                currentVideoUri = videos.firstOrNull { it.uri == uri }?.uri
                 currentTitle = audio.firstOrNull { it.uri == uri }?.title
                     ?: videos.firstOrNull { it.uri == uri }?.title
                     ?: mediaItem?.mediaMetadata?.title?.toString()?.takeIf { it.isNotBlank() }
