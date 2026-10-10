@@ -364,7 +364,7 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                     } }
                 }
             }
-            Spacer(Modifier.weight(1f))
+            if (section == "Home" || section == "Services") Spacer(Modifier.weight(1f))
             Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                 Column(Modifier.padding(14.dp)) {
                     Text("NOW PLAYING", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
