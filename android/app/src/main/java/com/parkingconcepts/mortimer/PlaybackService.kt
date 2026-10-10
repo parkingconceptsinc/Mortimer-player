@@ -10,7 +10,6 @@ import android.provider.OpenableColumns
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
-import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.LibraryResult
@@ -156,19 +155,19 @@ class PlaybackService : MediaLibraryService() {
                     val selectedIndex = queueUris.indexOf(selectedUri)
                     if (selectedIndex >= 0) {
                         val queue = queueUris.map { uri ->
-                        MediaItem.Builder()
-                            .setMediaId(uri.toString())
-                            .setUri(uri)
-                            .setMediaMetadata(
-                                MediaMetadata.Builder()
-                                    .setTitle(displayName(uri))
-                                    .setArtist("Local audio")
-                                    .setIsBrowsable(false)
-                                    .setIsPlayable(true)
-                                    .build()
-                            )
-                            .build()
-                    }
+                            MediaItem.Builder()
+                                .setMediaId(uri.toString())
+                                .setUri(uri)
+                                .setMediaMetadata(
+                                    MediaMetadata.Builder()
+                                        .setTitle(displayName(uri))
+                                        .setArtist("Local audio")
+                                        .setIsBrowsable(false)
+                                        .setIsPlayable(true)
+                                        .build()
+                                )
+                                .build()
+                        }
                         return Futures.immediateFuture(
                             MediaItemsWithStartPosition(queue, selectedIndex, startPositionMs)
                         )
