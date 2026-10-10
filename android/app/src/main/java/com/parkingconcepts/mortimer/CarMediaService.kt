@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.media.MediaBrowserServiceCompat
@@ -190,35 +191,71 @@ class CarMediaService : MediaBrowserServiceCompat() {
             result.sendResult(emptyList())
             return
         }
+        val knownUris = items.mapNotNullTo(mutableSetOf()) { item -> item.description.mediaUri?.toString() }
+        val imported = getSharedPreferences("mortimer_library", MODE_PRIVATE)
+            .getStringSet("audio", emptySet()).orEmpty()
+        imported.forEach { row ->
+            val parts = row.split("\\t", limit = 2)
+            if (parts.size == 2 && parts[0].isNotBlank() && knownUris.add(parts[0])) {
+                val uri = Uri.parse(parts[0])
+                items += MediaBrowserCompat.MediaItem(
+                    MediaDescriptionCompat.Builder()
+                        .setMediaId(uri.toString())
+                        .setMediaUri(uri)
+                        .setTitle(parts[1].ifBlank { "Unknown title" })
+                        .setSubtitle("Imported local audio")
+                        .build(),
+                    MediaBrowserCompat.MediaItem.FLAG_PLAYABLE
+                )
+            }
+        }
         result.sendResult(items)
     }
 
     private fun metadataFor(uri: Uri): MediaMetadataCompat? {
-        if (!hasAudioPermission()) return null
-        val projection = arrayOf(
-            MediaStore.Audio.Media.TITLE,
-            MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.ALBUM,
-            MediaStore.Audio.Media.DURATION
-        )
-        return try {
-            contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
-                if (!cursor.moveToFirst()) return null
-                val title = cursor.getString(0) ?: "Unknown title"
-                val artist = cursor.getString(1) ?: "Unknown artist"
-                val album = cursor.getString(2) ?: ""
-                val duration = cursor.getLong(3).coerceAtLeast(0L)
-                MediaMetadataCompat.Builder()
-                    .putString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID, uri.toString())
-                    .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
-                    .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
-                    .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, album)
-                    .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
-                    .build()
+        if (uri.scheme == "content" && !hasAudioPermission() &&
+            uri.authority?.contains("media", ignoreCase = true) == true) return null
+
+        var title = uri.lastPathSegment?.substringAfterLast('/')?.ifBlank { null } ?: "Unknown title"
+        var artist = "Unknown artist"
+        var album = ""
+        var duration = 0L
+
+        // SAF document URIs do not expose MediaStore columns. Try the generic document
+        // name first, then enrich metadata when the URI belongs to MediaStore.
+        runCatching {
+            contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    title = cursor.getString(0)?.takeIf { it.isNotBlank() } ?: title
+                }
             }
-        } catch (_: SecurityException) {
-            null
         }
+        runCatching {
+            contentResolver.query(
+                uri,
+                arrayOf(
+                    MediaStore.Audio.Media.TITLE,
+                    MediaStore.Audio.Media.ARTIST,
+                    MediaStore.Audio.Media.ALBUM,
+                    MediaStore.Audio.Media.DURATION
+                ),
+                null, null, null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    title = cursor.getString(0)?.takeIf { it.isNotBlank() } ?: title
+                    artist = cursor.getString(1)?.takeIf { it.isNotBlank() } ?: artist
+                    album = cursor.getString(2) ?: album
+                    duration = runCatching { cursor.getLong(3).coerceAtLeast(0L) }.getOrDefault(0L)
+                }
+            }
+        }
+        return MediaMetadataCompat.Builder()
+            .putString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID, uri.toString())
+            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
+            .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
+            .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, album)
+            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
+            .build()
     }
 
     private fun hasAudioPermission(): Boolean {
