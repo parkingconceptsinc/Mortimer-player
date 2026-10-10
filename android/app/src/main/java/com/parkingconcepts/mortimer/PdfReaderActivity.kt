@@ -14,6 +14,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.os.ParcelFileDescriptor
+import kotlin.math.sqrt
 
 class PdfReaderActivity : Activity() {
     private var descriptor: ParcelFileDescriptor? = null
@@ -94,11 +95,24 @@ class PdfReaderActivity : Activity() {
         try {
             val page = pdf.openPage(index)
             val screenWidth = (resources.displayMetrics.widthPixels - 32).coerceAtLeast(320)
-            val scale = screenWidth.toFloat() / page.width
-            val bitmap = Bitmap.createBitmap(screenWidth, (page.height * scale).toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+            val fitScale = screenWidth.toDouble() / page.width.coerceAtLeast(1)
+            var renderWidth = screenWidth
+            var renderHeight = (page.height.toDouble() * fitScale)
+                .coerceIn(1.0, Int.MAX_VALUE.toDouble()).toInt()
+            val estimatedPixels = renderWidth.toLong() * renderHeight.toLong()
+            if (estimatedPixels > MAX_RENDER_PIXELS) {
+                val downscale = sqrt(MAX_RENDER_PIXELS.toDouble() / estimatedPixels.toDouble())
+                renderWidth = (renderWidth * downscale).toInt().coerceAtLeast(1)
+                renderHeight = (renderHeight * downscale).toInt().coerceAtLeast(1)
+            }
+
+            val bitmap = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888)
             bitmap.eraseColor(Color.WHITE)
             try {
                 page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+            } catch (error: Throwable) {
+                if (!bitmap.isRecycled) bitmap.recycle()
+                throw error
             } finally {
                 page.close()
             }
@@ -133,5 +147,6 @@ class PdfReaderActivity : Activity() {
 
     companion object {
         const val EXTRA_TITLE = "pdf_title"
+        private const val MAX_RENDER_PIXELS = 4_000_000L
     }
 }
