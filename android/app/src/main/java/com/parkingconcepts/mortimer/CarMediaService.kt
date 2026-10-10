@@ -190,7 +190,7 @@ class CarMediaService : MediaBrowserServiceCompat() {
         val imported = getSharedPreferences("mortimer_library", MODE_PRIVATE)
             .getStringSet("audio", emptySet()).orEmpty()
         imported.forEach { row ->
-            val parts = row.split("\\t", limit = 2)
+            val parts = row.split('\t', limit = 2)
             if (parts.size == 2 && parts[0].isNotBlank() && knownUris.add(parts[0])) {
                 val uri = Uri.parse(parts[0])
                 items += MediaBrowserCompat.MediaItem(
