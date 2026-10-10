@@ -8,8 +8,10 @@ import android.os.Build
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import androidx.core.content.ContextCompat
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.LibraryResult
@@ -34,6 +36,17 @@ class PlaybackService : MediaLibraryService() {
             setAudioAttributes(androidx.media3.common.AudioAttributes.DEFAULT, true)
             setHandleAudioBecomingNoisy(true)
         }
+        player.addListener(object : Player.Listener {
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val uri = mediaItem?.localConfiguration?.uri ?: return
+                if (isKnownAudioUri(uri)) {
+                    getSharedPreferences("mortimer_library", MODE_PRIVATE)
+                        .edit()
+                        .putString(LAST_PLAYED_URI_KEY, uri.toString())
+                        .apply()
+                }
+            }
+        })
         librarySession = MediaLibrarySession.Builder(this, player, LibraryCallback()).build()
     }
 
@@ -112,6 +125,37 @@ class PlaybackService : MediaLibraryService() {
                 )
                 .build()
             return Futures.immediateFuture(LibraryResult.ofItem(item, null))
+        }
+
+        @OptIn(UnstableApi::class)
+        override fun onPlaybackResumption(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            isForPlayback: Boolean
+        ): ListenableFuture<MediaItemsWithStartPosition> {
+            val uris = allAudioUris()
+            if (uris.isEmpty()) {
+                return Futures.immediateFailedFuture(
+                    IllegalStateException("No local audio is available for playback resumption.")
+                )
+            }
+
+            val lastPlayedUri = getSharedPreferences("mortimer_library", MODE_PRIVATE)
+                .getString(LAST_PLAYED_URI_KEY, null)
+            val selectedIndex = uris.indexOfFirst { it.toString() == lastPlayedUri }
+                .takeIf { it >= 0 } ?: 0
+
+            // The system can request metadata only after reboot. Return one item in
+            // that case; return the complete queue when playback should actually resume.
+            val items = if (isForPlayback) {
+                uris.map { uri -> createPlayableItem(uri) }
+            } else {
+                listOf(createPlayableItem(uris[selectedIndex]))
+            }
+            val startIndex = if (isForPlayback) selectedIndex else 0
+            return Futures.immediateFuture(
+                MediaItemsWithStartPosition(items, startIndex, C.TIME_UNSET)
+            )
         }
 
         override fun onAddMediaItems(
@@ -206,6 +250,20 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    private fun createPlayableItem(uri: Uri): MediaItem =
+        MediaItem.Builder()
+            .setMediaId(uri.toString())
+            .setUri(uri)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(displayName(uri))
+                    .setArtist("Local audio")
+                    .setIsBrowsable(false)
+                    .setIsPlayable(true)
+                    .build()
+            )
+            .build()
+
     private fun isKnownAudioUri(uri: Uri): Boolean {
         val rawUri = uri.toString()
         val imported = getSharedPreferences("mortimer_library", MODE_PRIVATE)
@@ -279,5 +337,6 @@ class PlaybackService : MediaLibraryService() {
 
     companion object {
         private const val ROOT_ID = "mortimer_root"
+        private const val LAST_PLAYED_URI_KEY = "last_played_uri"
     }
 }
