@@ -104,25 +104,30 @@ class EpubReaderActivity : Activity() {
 
     private fun showChapter(index: Int) {
         if (chapters.isEmpty()) return
-        chapterIndex = index.coerceIn(0, chapters.lastIndex)
-        (intent.data ?: Uri.EMPTY).let { uri ->
-            getSharedPreferences("reading_progress", MODE_PRIVATE).edit()
-                .putInt(readingProgressKey(uri), chapterIndex).apply()
-        }
-        val (path, label) = chapters[chapterIndex]
+        val targetIndex = index.coerceIn(0, chapters.lastIndex)
+        val (path, label) = chapters[targetIndex]
         try {
             val entry = zip?.getEntry(path) ?: error("Chapter file is missing.")
             val html = zip!!.getInputStream(entry).bufferedReader().use { it.readText() }
             val title = Regex("""<title[^>]*>(.*?)</title>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
                 .find(html)?.groupValues?.get(1)?.replace(Regex("<[^>]+>"), "")?.trim()?.takeIf { it.isNotEmpty() }
                 ?: label
-            heading.text = "$title  ·  ${chapterIndex + 1} of ${chapters.size}"
+            val renderedContent = htmlToText(html)
+
+            // Commit the new position only after the chapter has been read and rendered.
+            body.text = renderedContent
+            heading.text = "$title  ·  ${targetIndex + 1} of ${chapters.size}"
+            scroll.scrollTo(0, 0)
+            chapterIndex = targetIndex
             previousChapter.isEnabled = chapterIndex > 0
             nextChapter.isEnabled = chapterIndex < chapters.lastIndex
-            body.text = htmlToText(html)
-            scroll.scrollTo(0, 0)
+            (intent.data ?: Uri.EMPTY).let { uri ->
+                getSharedPreferences("reading_progress", MODE_PRIVATE).edit()
+                    .putInt(readingProgressKey(uri), chapterIndex).apply()
+            }
         } catch (error: Exception) {
-            heading.text = "Chapter ${chapterIndex + 1} could not be loaded"
+            // Keep the last successfully displayed chapter as the navigation/progress position.
+            heading.text = "Chapter ${targetIndex + 1} could not be loaded"
             body.text = error.message ?: "The chapter could not be read."
             previousChapter.isEnabled = chapterIndex > 0
             nextChapter.isEnabled = chapterIndex < chapters.lastIndex
