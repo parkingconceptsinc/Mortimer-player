@@ -9,6 +9,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.documentfile.provider.DocumentFile
+import android.media.MediaMetadataRetriever
+import java.io.File
+import org.json.JSONArray
+import org.json.JSONObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -114,27 +123,219 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private data class LocalMedia(val uri: Uri, val title: String, val mime: String)
+private data class LocalMedia(
+    val uri: Uri,
+    val title: String,
+    val mime: String,
+    val artist: String = "Unknown artist",
+    val album: String = "",
+    val genre: String = "",
+    val year: Int = 0,
+    val folder: String = "",
+    val durationMs: Long = 0L,
+    val coverPath: String = "",
+    val addedAt: Long = System.currentTimeMillis()
+)
+
+private data class LocalPlaylist(
+    val id: String,
+    val name: String,
+    val uris: List<String>,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+private fun safeField(value: String): String = value.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ')
 
 private fun loadMedia(context: Context, category: String, mime: String): List<LocalMedia> {
     val values = context.getSharedPreferences("mortimer_library", Context.MODE_PRIVATE)
         .getStringSet(category, emptySet()).orEmpty()
     return values.mapNotNull { row ->
-        val parts = row.split("\t", limit = 2)
-        if (parts.size != 2) null else runCatching {
-            LocalMedia(Uri.parse(parts[0]), parts[1], mime)
+        val parts = row.split('\t')
+        if (parts.size < 2 || parts[0].isBlank()) null else runCatching {
+            LocalMedia(
+                uri = Uri.parse(parts[0]),
+                title = parts[1].ifBlank { "Unknown title" },
+                mime = mime,
+                artist = parts.getOrNull(2)?.ifBlank { "Unknown artist" } ?: "Unknown artist",
+                album = parts.getOrNull(3).orEmpty(),
+                genre = parts.getOrNull(4).orEmpty(),
+                year = parts.getOrNull(5)?.toIntOrNull() ?: 0,
+                folder = parts.getOrNull(6).orEmpty(),
+                durationMs = parts.getOrNull(7)?.toLongOrNull() ?: 0L,
+                coverPath = parts.getOrNull(8).orEmpty(),
+                addedAt = parts.getOrNull(9)?.toLongOrNull() ?: System.currentTimeMillis()
+            )
         }.getOrNull()
     }.sortedBy { it.title.lowercase() }
 }
 
 private fun addMediaIfMissing(target: MutableList<LocalMedia>, item: LocalMedia) {
-    if (target.none { it.uri == item.uri }) target.add(item)
+    val index = target.indexOfFirst { it.uri == item.uri }
+    if (index < 0) target.add(item) else target[index] = item
 }
 
 private fun saveMedia(context: Context, category: String, items: List<LocalMedia>) {
+    val rows = items.map { item ->
+        listOf(
+            item.uri.toString(), item.title, item.artist, item.album, item.genre,
+            item.year.toString(), item.folder, item.durationMs.toString(),
+            item.coverPath, item.addedAt.toString()
+        ).joinToString("\t", transform = ::safeField)
+    }.toSet()
     context.getSharedPreferences("mortimer_library", Context.MODE_PRIVATE)
-        .edit().putStringSet(category, items.map { "${it.uri}\t${it.title}" }.toSet()).apply()
+        .edit().putStringSet(category, rows).apply()
 }
+
+private fun enrichMediaMetadata(context: Context, item: LocalMedia): LocalMedia {
+    val retriever = MediaMetadataRetriever()
+    return try {
+        retriever.setDataSource(context, item.uri)
+        val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+            ?.trim()?.takeIf { it.isNotBlank() } ?: item.title
+        val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+            ?.trim()?.takeIf { it.isNotBlank() } ?: item.artist
+        val album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
+            ?.trim()?.takeIf { it.isNotBlank() } ?: item.album
+        val genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE)
+            ?.trim()?.takeIf { it.isNotBlank() } ?: item.genre
+        val year = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)?.toIntOrNull() ?: item.year
+        val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+            ?: item.durationMs
+        val coverPath = runCatching {
+            val art = retriever.embeddedPicture?.takeIf { it.isNotEmpty() && it.size <= MAX_EMBEDDED_ART_BYTES }
+            if (art == null) item.coverPath else {
+                val dir = File(context.filesDir, "album-art")
+                if (!dir.exists()) dir.mkdirs()
+                val destination = File(dir, "${item.uri.toString().hashCode().toUInt().toString(16)}.jpg")
+                destination.writeBytes(art)
+                destination.absolutePath
+            }
+        }.getOrDefault(item.coverPath)
+        item.copy(title = title, artist = artist, album = album, genre = genre, year = year,
+            durationMs = duration, coverPath = coverPath)
+    } catch (_: Exception) {
+        item
+    } finally {
+        runCatching { retriever.release() }
+    }
+}
+
+private fun loadStringList(context: Context, key: String): List<String> {
+    val raw = context.getSharedPreferences("mortimer_library", Context.MODE_PRIVATE).getString(key, null)
+        ?: return emptyList()
+    return runCatching {
+        val array = JSONArray(raw)
+        (0 until array.length()).mapNotNull { array.optString(it).takeIf(String::isNotBlank) }
+    }.getOrDefault(emptyList())
+}
+
+private fun saveStringList(context: Context, key: String, values: List<String>) {
+    val array = JSONArray()
+    values.forEach(array::put)
+    context.getSharedPreferences("mortimer_library", Context.MODE_PRIVATE).edit().putString(key, array.toString()).apply()
+}
+
+private fun loadPlayCounts(context: Context): Map<String, Int> {
+    val raw = context.getSharedPreferences("mortimer_library", Context.MODE_PRIVATE).getString("play_counts", null)
+        ?: return emptyMap()
+    return runCatching {
+        val json = JSONObject(raw)
+        json.keys().asSequence().associateWith { key -> json.optInt(key, 0) }
+    }.getOrDefault(emptyMap())
+}
+
+private fun savePlayCounts(context: Context, counts: Map<String, Int>) {
+    val json = JSONObject()
+    counts.forEach { (uri, count) -> json.put(uri, count) }
+    context.getSharedPreferences("mortimer_library", Context.MODE_PRIVATE).edit().putString("play_counts", json.toString()).apply()
+}
+
+private fun loadPlaylists(context: Context): List<LocalPlaylist> {
+    val raw = context.getSharedPreferences("mortimer_library", Context.MODE_PRIVATE).getString("playlists", null)
+        ?: return emptyList()
+    return runCatching {
+        val array = JSONArray(raw)
+        (0 until array.length()).mapNotNull { i ->
+            val item = array.optJSONObject(i) ?: return@mapNotNull null
+            val uris = item.optJSONArray("uris") ?: JSONArray()
+            LocalPlaylist(
+                item.optString("id", "playlist_$i"),
+                item.optString("name", "Playlist"),
+                (0 until uris.length()).mapNotNull { uris.optString(it).takeIf(String::isNotBlank) },
+                item.optLong("createdAt", System.currentTimeMillis())
+            )
+        }
+    }.getOrDefault(emptyList())
+}
+
+private fun savePlaylists(context: Context, playlists: List<LocalPlaylist>) {
+    val array = JSONArray()
+    playlists.forEach { playlist ->
+        val tracks = JSONArray()
+        playlist.uris.forEach(tracks::put)
+        array.put(JSONObject().put("id", playlist.id).put("name", playlist.name)
+            .put("uris", tracks).put("createdAt", playlist.createdAt))
+    }
+    context.getSharedPreferences("mortimer_library", Context.MODE_PRIVATE).edit().putString("playlists", array.toString()).apply()
+}
+
+private fun collectFolderMedia(context: Context, root: DocumentFile): List<Pair<String, LocalMedia>> {
+    val found = mutableListOf<Pair<String, LocalMedia>>()
+    fun walk(directory: DocumentFile, parentPath: String) {
+        directory.listFiles().forEach { child ->
+            if (child.isDirectory) {
+                walk(child, listOf(parentPath, child.name.orEmpty()).filter(String::isNotBlank).joinToString("/"))
+            } else if (child.isFile) {
+                val name = child.name ?: return@forEach
+                val lower = name.lowercase()
+                val extension = lower.substringAfterLast('.', "")
+                val category = when {
+                    extension in AUDIO_EXTENSIONS || child.type?.startsWith("audio/") == true -> "audio"
+                    extension in VIDEO_EXTENSIONS || child.type?.startsWith("video/") == true -> "videos"
+                    extension in setOf("cbz", "cbr") -> "comics"
+                    extension in BOOK_EXTENSIONS || child.type == "application/pdf" || child.type == "text/plain" -> "books"
+                    else -> null
+                } ?: return@forEach
+                val mime = child.type ?: mimeForExtension(extension)
+                found += category to LocalMedia(
+                    uri = child.uri,
+                    title = name.substringBeforeLast('.', name),
+                    mime = mime,
+                    folder = parentPath,
+                    addedAt = System.currentTimeMillis()
+                )
+            }
+        }
+    }
+    walk(root, root.name.orEmpty())
+    return found
+}
+
+private fun mimeForExtension(extension: String): String = when (extension) {
+    "mp3" -> "audio/mpeg"
+    "m4a", "mp4" -> "audio/mp4"
+    "flac" -> "audio/flac"
+    "wav" -> "audio/wav"
+    "ogg", "oga" -> "audio/ogg"
+    "opus" -> "audio/opus"
+    "aac" -> "audio/aac"
+    "mp4", "m4v" -> "video/mp4"
+    "mkv" -> "video/x-matroska"
+    "webm" -> "video/webm"
+    "avi" -> "video/x-msvideo"
+    "mov" -> "video/quicktime"
+    "pdf" -> "application/pdf"
+    "epub" -> "application/epub+zip"
+    "cbz" -> "application/vnd.comicbook+zip"
+    "cbr" -> "application/vnd.comicbook-rar"
+    "txt", "md", "markdown" -> "text/plain"
+    else -> "*/*"
+}
+
+private val AUDIO_EXTENSIONS = setOf("mp3", "m4a", "m4b", "aac", "flac", "wav", "aiff", "aif", "ogg", "oga", "opus", "wma", "ape", "alac", "dsf", "dff", "mid", "midi")
+private val VIDEO_EXTENSIONS = setOf("mp4", "mkv", "m4v", "mov", "avi", "webm", "flv", "mpg", "mpeg", "3gp", "ts", "mts", "m2ts", "wmv")
+private val BOOK_EXTENSIONS = setOf("pdf", "epub", "txt", "md", "markdown", "log", "nfo", "csv", "tsv", "json", "xml", "yaml", "yml", "toml", "ini", "cfg", "conf", "srt", "vtt", "ass", "ssa", "sub", "html", "htm", "rtf", "docx", "odt")
+private const val MAX_EMBEDDED_ART_BYTES = 4 * 1024 * 1024
 
 private fun displayName(context: Context, uri: Uri, fallback: String): String {
     return runCatching {
