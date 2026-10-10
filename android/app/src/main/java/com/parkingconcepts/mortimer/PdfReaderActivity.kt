@@ -86,7 +86,8 @@ class PdfReaderActivity : Activity() {
         controls.addView(next)
         root.addView(controls, LinearLayout.LayoutParams(-1, -2))
         setContentView(root)
-        showPage(0)
+        val progressKey = readingProgressKey(uri, "pdf")
+        showPage(getSharedPreferences("reading_progress", MODE_PRIVATE).getInt(progressKey, 0))
     }
 
     private fun showPage(index: Int) {
@@ -120,6 +121,7 @@ class PdfReaderActivity : Activity() {
             pageImage.setImageBitmap(bitmap)
             if (previousBitmap != null && previousBitmap !== bitmap && !previousBitmap.isRecycled) previousBitmap.recycle()
             pageIndex = index
+            getSharedPreferences("reading_progress", MODE_PRIVATE).edit().putInt(readingProgressKey(intent.data ?: Uri.EMPTY, "pdf"), index).apply()
             pageLabel.text = "${index + 1} / ${pdf.pageCount}"
             previous.isEnabled = index > 0
             next.isEnabled = index < pdf.pageCount - 1
@@ -148,5 +150,6 @@ class PdfReaderActivity : Activity() {
     companion object {
         const val EXTRA_TITLE = "pdf_title"
         private const val MAX_RENDER_PIXELS = 4_000_000L
+        private fun readingProgressKey(uri: Uri, type: String): String = "${type}_${uri.toString().hashCode()}"
     }
 }
