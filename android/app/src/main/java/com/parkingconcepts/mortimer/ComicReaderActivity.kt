@@ -89,28 +89,40 @@ class ComicReaderActivity : Activity() {
 
     private fun showPage(index: Int) {
         if (pages.isEmpty()) return
-        pageIndex = index.coerceIn(0, pages.lastIndex)
-        (intent.data ?: Uri.EMPTY).let { uri ->
-            getSharedPreferences("reading_progress", MODE_PRIVATE).edit()
-                .putInt(readingProgressKey(uri), pageIndex).apply()
+        val requestedIndex = index.coerceIn(0, pages.lastIndex)
+        try {
+            val entry = zip?.getEntry(pages[requestedIndex]) ?: error("Could not find this comic page.")
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            zip!!.getInputStream(entry).use { BitmapFactory.decodeStream(it, null, bounds) }
+            check(bounds.outWidth > 0 && bounds.outHeight > 0) { "This comic page uses an unsupported or damaged image." }
+
+            val targetWidth = (resources.displayMetrics.widthPixels - 32).coerceAtLeast(1)
+            val targetHeight = (resources.displayMetrics.heightPixels * 0.72f).toInt().coerceAtLeast(1)
+            var sample = 1
+            while (bounds.outWidth / (sample * 2) >= targetWidth ||
+                bounds.outHeight / (sample * 2) >= targetHeight) {
+                if (sample > (1 shl 29)) break
+                sample *= 2
+            }
+            val bitmap = zip!!.getInputStream(entry).use { stream ->
+                BitmapFactory.decodeStream(stream, null, BitmapFactory.Options().apply { inSampleSize = sample })
+            } ?: error("Could not decode this comic page.")
+
+            val oldBitmap = (image.drawable as? BitmapDrawable)?.bitmap
+            image.setImageBitmap(bitmap)
+            if (oldBitmap != null && oldBitmap !== bitmap && !oldBitmap.isRecycled) oldBitmap.recycle()
+            pageIndex = requestedIndex
+            (intent.data ?: Uri.EMPTY).let { uri ->
+                getSharedPreferences("reading_progress", MODE_PRIVATE).edit()
+                    .putInt(readingProgressKey(uri), pageIndex).apply()
+            }
+            previousPage.isEnabled = pageIndex > 0
+            nextPage.isEnabled = pageIndex < pages.lastIndex
+            status.text = "Page ${pageIndex + 1} of ${pages.size}"
+        } catch (error: Exception) {
+            status.text = "Could not display page ${requestedIndex + 1}: ${error.message ?: "Unknown error"}"
+            Toast.makeText(this, status.text, Toast.LENGTH_LONG).show()
         }
-        val entry = zip?.getEntry(pages[pageIndex]) ?: return
-        previousPage.isEnabled = pageIndex > 0
-        nextPage.isEnabled = pageIndex < pages.lastIndex
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        zip!!.getInputStream(entry).use { BitmapFactory.decodeStream(it, null, bounds) }
-        val targetWidth = resources.displayMetrics.widthPixels - 32
-        val targetHeight = (resources.displayMetrics.heightPixels * 0.72f).toInt()
-        var sample = 1
-        while (bounds.outWidth / (sample * 2) >= targetWidth ||
-            bounds.outHeight / (sample * 2) >= targetHeight) sample *= 2
-        val bitmap = zip!!.getInputStream(entry).use { stream ->
-            BitmapFactory.decodeStream(stream, null, BitmapFactory.Options().apply { inSampleSize = sample })
-        } ?: error("Could not decode the page.")
-        val oldBitmap = (image.drawable as? BitmapDrawable)?.bitmap
-        image.setImageBitmap(bitmap)
-        if (oldBitmap != null && oldBitmap !== bitmap && !oldBitmap.isRecycled) oldBitmap.recycle()
-        status.text = "Page ${pageIndex + 1} of ${pages.size}"
     }
 
     override fun onDestroy() {
