@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackException
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
@@ -167,6 +168,7 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
     var currentTitle by remember { mutableStateOf(player.currentMediaItem?.mediaMetadata?.title?.toString() ?: "Nada se está reproduciendo") }
     var currentVideoUri by remember { mutableStateOf<Uri?>(null) }
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
+    var playbackError by remember { mutableStateOf<String?>(null) }
 
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         uris.forEach { uri ->
@@ -200,7 +202,19 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
+            override fun onPlayerError(error: PlaybackException) {
+                playbackError = when (error.errorCode) {
+                    PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
+                    PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES ->
+                        "Formato o códec no compatible con este dispositivo."
+                    PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
+                    PlaybackException.ERROR_CODE_IO_NO_PERMISSION ->
+                        "No se puede acceder al archivo. Vuelve a importarlo."
+                    else -> "No se pudo reproducir este archivo. Código: " + error.errorCodeName
+                }
+            }
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                playbackError = null
                 val uri = mediaItem?.localConfiguration?.uri
                 currentTitle = audio.firstOrNull { it.uri == uri }?.title
                     ?: mediaItem?.mediaMetadata?.title?.toString()
@@ -323,6 +337,9 @@ private fun MortimerApp(player: Player, openSpotify: () -> Unit, openExternal: (
                 Column(Modifier.padding(14.dp)) {
                     Text("REPRODUCIENDO", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
                     Text(currentTitle, color = MainText, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+                    playbackError?.let { message ->
+                        Text(message, color = Color(0xFFFF9A86), fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp))
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
                         Button(onClick = { if (player.hasPreviousMediaItem()) player.seekToPreviousMediaItem() }, enabled = player.hasPreviousMediaItem(), colors = ButtonDefaults.buttonColors(containerColor = Panel2)) { Text("Anterior") }
                         Button(onClick = { if (player.isPlaying) player.pause() else player.play() }, enabled = player.currentMediaItem != null, colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF111114))) { Text(if (isPlaying) "Ⅱ Pausar" else "▶ Reproducir") }
