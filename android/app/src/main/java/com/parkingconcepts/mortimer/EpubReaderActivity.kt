@@ -60,7 +60,10 @@ class EpubReaderActivity : Activity() {
             }
             check(chapters.isNotEmpty()) { "This EPUB contains no supported chapters." }
             buildLayout()
-            showChapter(0)
+            val uriForProgress = intent.data ?: Uri.EMPTY
+            val savedChapter = getSharedPreferences("reading_progress", MODE_PRIVATE)
+                .getInt(readingProgressKey(uriForProgress), 0)
+            showChapter(savedChapter)
         } catch (error: Exception) {
             Toast.makeText(this, error.message ?: "Could not open the EPUB.", Toast.LENGTH_LONG).show()
             finish()
@@ -99,12 +102,18 @@ class EpubReaderActivity : Activity() {
     private fun showChapter(index: Int) {
         if (chapters.isEmpty()) return
         chapterIndex = index.coerceIn(0, chapters.lastIndex)
+        (intent.data ?: Uri.EMPTY).let { uri ->
+            getSharedPreferences("reading_progress", MODE_PRIVATE).edit()
+                .putInt(readingProgressKey(uri), chapterIndex).apply()
+        }
         val content = chapters[chapterIndex].second
         val split = content.indexOf("\n\n")
         heading.text = "Chapter ${chapterIndex + 1} of ${chapters.size}"
         body.text = content.substring(0, split) + "\n\n" + content.substring(split + 2)
         scroll.scrollTo(0, 0)
     }
+
+    private fun readingProgressKey(uri: Uri): String = "epub_${uri.toString().hashCode()}"
 
     override fun onDestroy() {
         zip?.close()
